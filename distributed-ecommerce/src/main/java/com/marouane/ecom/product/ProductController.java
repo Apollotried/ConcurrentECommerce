@@ -1,0 +1,53 @@
+package com.marouane.ecom.product;
+
+import com.marouane.ecom.common.PageResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/products")
+@RequiredArgsConstructor
+public class ProductController {
+    private final ProductService productService;
+
+
+    @PostMapping
+    public ResponseEntity<Product> createProduct(@Valid @RequestBody ProductRequest productRequest) {
+        Product createdProduct = productService.createProduct(productRequest);
+        return new ResponseEntity<>(createdProduct, HttpStatus.CREATED);
+    }
+
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @Valid @RequestBody ProductRequest productRequest) {
+        Product updatedProduct = productService.updateProduct(id, productRequest);
+        return ResponseEntity.ok(updatedProduct);
+    }
+
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> softDeleteProduct(@PathVariable Long id) {
+        productService.softDeleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
+
+    @GetMapping
+    public ResponseEntity<PageResponse<ProductResponse>> getAllProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PageResponse<ProductResponse> productPageResponse = productService.getAllProducts(page, size);
+        return ResponseEntity.ok(productPageResponse);
+    }
+
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
+        ProductResponse productResponse = productService.getProductById(id);
+        return ResponseEntity.ok(productResponse);
+    }
+
+}

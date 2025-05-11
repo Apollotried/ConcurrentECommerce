@@ -1,0 +1,33 @@
+services:
+  postgres:
+    container_name: postgres-decomme
+    image: postgres
+    environment:
+      POSTGRES_USER: username
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: distributed_ecomm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - decom
+    restart: unless-stopped
+
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    networks:
+      - decom
+
+networks:
+  decom:
+    driver: bridge
+
+volumes:
+  postgres_data:
