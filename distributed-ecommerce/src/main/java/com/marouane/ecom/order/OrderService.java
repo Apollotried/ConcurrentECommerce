@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -44,6 +45,7 @@ public class OrderService {
 
         Order order = Order.builder()
                 .user(user)
+                .items(new ArrayList<>())
                 .status(OrderStatus.PENDING)
                 .build();
 

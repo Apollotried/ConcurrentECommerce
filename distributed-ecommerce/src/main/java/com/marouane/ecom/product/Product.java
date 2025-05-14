@@ -1,5 +1,6 @@
 package com.marouane.ecom.product;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
@@ -11,7 +12,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
-@Table(name = "products")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -26,7 +26,7 @@ public class Product {
     @Column(unique = true, nullable = false)
     private String name;
 
-    @Lob
+
     private String description;
 
     private String category;
@@ -46,6 +46,7 @@ public class Product {
 
 
     @Version
+    @JsonIgnore
     private int version;
 
 

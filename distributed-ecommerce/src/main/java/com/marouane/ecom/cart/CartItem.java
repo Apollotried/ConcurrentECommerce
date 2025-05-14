@@ -1,6 +1,7 @@
 package com.marouane.ecom.cart;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.marouane.ecom.product.Product;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
@@ -29,6 +30,7 @@ public class CartItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
+    @JsonIgnore
     private Product product;
 
     @Column(nullable = false)

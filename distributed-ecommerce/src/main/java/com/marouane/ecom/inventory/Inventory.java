@@ -1,5 +1,6 @@
 package com.marouane.ecom.inventory;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.marouane.ecom.exception.InsufficientStockException;
 import com.marouane.ecom.product.Product;
 import jakarta.persistence.*;
@@ -11,7 +12,6 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "inventories")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,6 +25,7 @@ public class Inventory {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false, unique = true)
+    @JsonIgnore
     private Product product;
 
     @Column(nullable = false)
@@ -34,6 +35,7 @@ public class Inventory {
     private int totalReserved;
 
     @Version
+    @JsonIgnore
     private Long version;
 
     @CreationTimestamp

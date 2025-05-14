@@ -1,25 +1,24 @@
-package com.marouane.ecom.cart;
+package com.marouane.ecom.order;
 
 import com.marouane.ecom.auth.AuthenticationRequest;
 import com.marouane.ecom.auth.AuthenticationResponse;
 import com.marouane.ecom.auth.RegistrationRequest;
+import com.marouane.ecom.cart.Cart;
+import com.marouane.ecom.cart.CartRepository;
 import com.marouane.ecom.common.BaseIntegrationTest;
 import com.marouane.ecom.inventory.Inventory;
 import com.marouane.ecom.inventory.InventoryRepository;
 import com.marouane.ecom.product.Product;
-import com.marouane.ecom.product.ProductRepository;
 import com.marouane.ecom.product.ProductRequest;
 import com.marouane.ecom.product.ProductStatus;
 import com.marouane.ecom.user.Role;
 import com.marouane.ecom.user.RoleRepository;
-import com.marouane.ecom.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Objects;
@@ -28,34 +27,28 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 
-
-
-class CartIntegrationTest extends BaseIntegrationTest {
-
-    @Autowired
-    private CartRepository cartRepository;
-
-    @Autowired
-    private InventoryRepository inventoryRepository;
-
-    @Autowired
-    private ProductRepository productRepository;
+class OrderIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TestRestTemplate restTemplate;
 
     @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private RoleRepository roleRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private InventoryRepository inventoryRepository;
 
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private CartRepository cartRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     String jwtToken;
-    private Long testProductId;
-    private UUID cartItemId;
+    Long testProductId;
 
 
     protected HttpHeaders getAuthHeaders() {
@@ -84,13 +77,12 @@ class CartIntegrationTest extends BaseIntegrationTest {
         jdbcTemplate.execute("DELETE FROM _user_roles");
         jdbcTemplate.execute("DELETE FROM _user");
         jdbcTemplate.execute("DELETE FROM role");
-        cartRepository.deleteAll();
-        productRepository.deleteAll();
 
         Role userRole = Role.builder()
                 .name("USER")
                 .build();
         roleRepository.save(userRole);
+
 
         RegistrationRequest request = new RegistrationRequest(
                 "first",
@@ -112,6 +104,7 @@ class CartIntegrationTest extends BaseIntegrationTest {
         );
         jwtToken = Objects.requireNonNull(response.getBody()).getToken();
 
+
         // Create test product via API
         ProductRequest productRequest = new ProductRequest(
                 "Test Product",
@@ -129,6 +122,14 @@ class CartIntegrationTest extends BaseIntegrationTest {
         );
         testProductId = productResponse.getBody().getId();
 
+        // Create inventory via API
+        ResponseEntity<Inventory> inventory = performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/inventory/create/" + testProductId + "/" + 100,
+                null,
+                Inventory.class
+        );
+
 
     }
 
@@ -143,80 +144,74 @@ class CartIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void cartLifecycle(){
+    void shouldCreateOrderFromCart() {
 
-        // Create inventory via API
-        ResponseEntity<Inventory> inventory = performAuthenticatedRequest(
+        // Add item to cart
+        ResponseEntity<Void> addToCartResponse = performAuthenticatedRequest(
                 HttpMethod.POST,
-                "/api/inventory/create/" + testProductId + "/" + 100,
-                null,
-                Inventory.class
-        );
-
-        assertThat(inventory.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(inventory.getBody()).isNotNull();
-        assertThat(inventory.getBody().getAvailableQuantity()).isEqualTo(100);
-
-        // get an empty one
-        ResponseEntity<Cart> initialCart = performAuthenticatedRequest(
-                HttpMethod.GET,
-                "/api/cart",
-                null,
-                Cart.class
-        );
-        assertThat(initialCart.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(initialCart.getBody()).isNotNull();
-        assertThat(initialCart.getBody().getItems()).isEmpty();
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(jwtToken);
-        HttpEntity<ProductRequest> entity = new HttpEntity<>(headers);
-
-        // add to cart
-        ResponseEntity<Cart> afterAdd = restTemplate.postForEntity(
                 "/api/cart/add/" + testProductId + "/2",
-                entity,
-                Cart.class
-        );
-
-        // Assertions
-        assertThat(afterAdd.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(afterAdd.getBody()).isNotNull();
-        assertThat(afterAdd.getBody().getItems())
-                .hasSize(1)
-                .first()
-                .extracting(CartItem::getQuantity, CartItem::getUnitPrice)
-                .containsExactly(2, BigDecimal.valueOf(49.99));
-
-        cartItemId = afterAdd.getBody().getItems().get(0).getId();
-
-        // update quantity
-        ResponseEntity<Cart> afterUpdate = performAuthenticatedRequest(
-                HttpMethod.PUT,
-                "/api/cart/update/" + cartItemId + "?quantity=5",
                 null,
-                Cart.class
-        );
+                Void.class);
+        assertThat(addToCartResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
-        assertThat(afterUpdate.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(afterUpdate.getBody()).isNotNull();
-        assertThat(afterUpdate.getBody().getItems())
-                .hasSize(1)
-                .first()
-                .extracting(CartItem::getQuantity, CartItem::getUnitPrice)
-                .containsExactly(5, BigDecimal.valueOf(49.99));
-
-        // remove the item
-        ResponseEntity<Void> removeResponse = performAuthenticatedRequest(
-                HttpMethod.DELETE,
-                "/api/cart/remove/" + cartItemId,
+        // Create order
+        ResponseEntity<Order> createOrderResponse = performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/orders/create",
                 null,
-                Void.class
-        );
+                Order.class);
 
-        assertThat(removeResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(createOrderResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Order order = createOrderResponse.getBody();
+        assertThat(order).isNotNull();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(order.getItems()).hasSize(1);
+        assertThat(order.getItems().get(0).getProduct().getId()).isEqualTo(testProductId);
+        assertThat(order.getItems().get(0).getQuantity()).isEqualTo(2);
 
-  }
+
+        // Verify inventory was reserved
+        Inventory inventory = inventoryRepository.findByProductId(testProductId).orElseThrow();
+        assertThat(inventory.getTotalReserved()).isEqualTo(2);
+
+
+    }
+
+    @Test
+    void shouldCancelOrder() {
+        // Create order
+        ResponseEntity<Void> addToCartResponse = performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/cart/add/" + testProductId + "/3",
+                null,
+                Void.class);
+
+        ResponseEntity<Order> createOrderResponse = performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/orders/create",
+                null,
+                Order.class);
+        UUID orderId = createOrderResponse.getBody().getId();
+
+        // Cancel order
+        ResponseEntity<Void> cancelResponse = performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/orders/" + orderId + "/cancel",
+                null,
+                Void.class);
+
+        // Verify response
+        assertThat(cancelResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        // Verify order status
+        Order cancelledOrder = orderRepository.findById(orderId).orElseThrow();
+        assertThat(cancelledOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        // Verify inventory was released
+        Inventory inventory = inventoryRepository.findByProductId(testProductId).orElseThrow();
+        assertThat(inventory.getTotalReserved()).isZero();
+
+    }
 
 
 

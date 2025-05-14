@@ -1,5 +1,6 @@
 package com.marouane.ecom.cart;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.marouane.ecom.user.User;
 import jakarta.persistence.*;
@@ -27,6 +28,7 @@ public class Cart {
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, unique = true)
+    @JsonIgnore
     private User user;
 
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -70,6 +72,7 @@ public class Cart {
 
 
     @Version
+    @JsonIgnore
     private Long version;
 
 

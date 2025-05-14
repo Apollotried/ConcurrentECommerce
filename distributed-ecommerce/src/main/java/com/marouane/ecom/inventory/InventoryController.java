@@ -11,10 +11,10 @@ public class InventoryController {
 
     private final InventoryService inventoryService;
 
-    @PostMapping("/create")
+    @PostMapping("/create/{productId}/{quantity}")
     public ResponseEntity<Inventory> createInventory(
-            @RequestParam Long productId,
-            @RequestParam int quantity) {
+            @PathVariable Long productId,
+            @PathVariable int quantity) {
         Inventory inventory = inventoryService.createInventory(productId, quantity);
         return ResponseEntity.ok(inventory);
     }
