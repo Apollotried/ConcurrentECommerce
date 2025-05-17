@@ -1,7 +1,10 @@
 package com.marouane.ecom.product;
 
 import com.marouane.ecom.common.PageResponse;
+import com.marouane.ecom.exception.ProductCreationException;
+import com.marouane.ecom.exception.ProductDeletionException;
 import com.marouane.ecom.exception.ProductNotFoundException;
+import com.marouane.ecom.inventory.InventoryService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +21,7 @@ import java.util.List;
 public class ProductService {
     private final ProductRepository productRepository;
     private final ProductMapper productMapper;
+    private final InventoryService inventoryService;
 
     @Transactional
     public Product createProduct(ProductRequest request) {
@@ -73,6 +77,11 @@ public class ProductService {
     public void softDeleteProduct(Long productId) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+
+        if (inventoryService.hasActiveReservations(productId)){
+            throw new ProductDeletionException(
+                    "Cannot discontinue product with active reservations");
+        }
 
         product.setStatus(ProductStatus.DISCONTINUED);
         productRepository.save(product);

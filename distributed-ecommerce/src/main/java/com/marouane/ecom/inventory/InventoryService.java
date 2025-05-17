@@ -1,18 +1,34 @@
 package com.marouane.ecom.inventory;
 
 import com.marouane.ecom.exception.*;
+import com.marouane.ecom.parser.StockUpdateRecord;
 import com.marouane.ecom.product.Product;
 import com.marouane.ecom.product.ProductRepository;
+import com.opencsv.bean.CsvToBean;
+import com.opencsv.bean.CsvToBeanBuilder;
+import com.opencsv.bean.HeaderColumnNameMappingStrategy;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 
 @Service
@@ -22,6 +38,9 @@ public class InventoryService {
     private final ProductRepository productRepository;
     private final InventoryMapper inventoryMapper;
     private final InventoryReservationRepository reservationRepository;
+    private final PlatformTransactionManager transactionManager;
+    private final ExecutorService bulkUpdateExecutor =
+            Executors.newFixedThreadPool(4);
 
 
     @Transactional
@@ -146,6 +165,66 @@ public class InventoryService {
         reservationRepository.deleteAll(expired);
     }
 
+
+    public boolean hasActiveReservations(Long productId) {
+        return reservationRepository.existsByProductIdAndExpiresAtAfter(
+                productId,
+                LocalDateTime.now()
+        );
+    }
+
+    public void releaseAllReservationsForOrder(UUID orderId){
+        List<InventoryReservation> reservations = reservationRepository.findByOrderId(orderId);
+
+        reservations.forEach(reservation -> {
+            Inventory inventory = inventoryRepository.findByProductIdWithLock(
+                    reservation.getProductId()
+            ).orElseThrow(() -> new InventoryNotFoundException("Inventory not found"));
+
+            inventory.releaseStock(reservation.getQuantity());
+            inventoryRepository.save(inventory);
+        });
+
+        reservationRepository.deleteAll(reservations);
+
+    }
+
+
+    public void bulkUpdateStock(List<StockUpdateRecord> updates){
+        List<CompletableFuture<Void>> futures = updates.stream()
+                .map(update -> CompletableFuture.runAsync(
+                        () -> {
+                            TransactionTemplate transactionTemplate =
+                                    new TransactionTemplate(transactionManager);
+                            transactionTemplate.execute(status -> {
+                                try {
+                                    updateSingleProduct(update);
+                                    return null;
+                                } catch (Exception e) {
+                                    status.setRollbackOnly();
+                                    throw new CompletionException(e);
+                                }
+                            });
+                        },
+                        bulkUpdateExecutor
+                ))
+                .toList();
+
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (CompletionException e) {
+            throw new RuntimeException("Some updates failed: " + e.getCause().getMessage());
+        }
+    }
+
+
+    protected void updateSingleProduct(StockUpdateRecord update){
+        Inventory inventory = inventoryRepository.findByProductIdWithLock(update.getProductId())
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory not found with product id " + update.getProductId()));
+
+        inventory.addStock(update.getQuantity());
+        inventoryRepository.save(inventory);
+    }
 
 
 }

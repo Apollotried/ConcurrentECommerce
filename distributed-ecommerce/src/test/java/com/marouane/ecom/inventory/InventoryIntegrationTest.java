@@ -17,8 +17,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.*;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.LinkedMultiValueMap;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Objects;
@@ -47,7 +50,7 @@ class InventoryIntegrationTest extends BaseIntegrationTest {
     private InventoryService inventoryService;
 
     @Autowired
-            private InventoryReservationRepository reservationRepository;
+    private InventoryReservationRepository reservationRepository;
 
 
 
@@ -72,6 +75,15 @@ class InventoryIntegrationTest extends BaseIntegrationTest {
                 method,
                 new HttpEntity<>(body, getAuthHeaders()),
                 responseType
+        );
+    }
+
+    protected MockMultipartFile createMockCsvFile(String content) throws IOException {
+        return new MockMultipartFile(
+                "file",
+                "test.csv",
+                "text/csv",
+                content.getBytes()
         );
     }
 
@@ -207,7 +219,7 @@ class InventoryIntegrationTest extends BaseIntegrationTest {
 
 
 
-}
+    }
 
     @Test
     void inventoryReservationLifecycle() {
@@ -238,6 +250,48 @@ class InventoryIntegrationTest extends BaseIntegrationTest {
         assertThat(finalInventory.getTotalQuantity()).isEqualTo(80);
         assertThat(finalInventory.getTotalReserved()).isZero();
         assertThat(reservationRepository.findByOrderId(orderId)).isEmpty();
+
+    }
+
+    @Test
+    void uploadStockUpdates_ShouldProcessValidCSV() throws Exception {
+        performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/inventory/create/" + testProductId + "/100",
+                null,
+                Inventory.class
+        );
+
+        String csvContent = "product_id,quantity\n" + testProductId + ",50";
+        MockMultipartFile file = createMockCsvFile(csvContent);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    RequestEntity
+                            .post("/api/inventory/upload")
+                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtToken)
+                            .contentType(MediaType.MULTIPART_FORM_DATA)
+                            .body(new LinkedMultiValueMap<>() {{
+                                add("file", new org.springframework.core.io.ByteArrayResource(file.getBytes()) {
+                                    @Override
+                                    public String getFilename() {
+                                        return file.getOriginalFilename();
+                                    }
+                                });
+                            }}),
+                    String.class
+            );
+            System.out.println("Response Body: " + response.getBody());
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        }catch (Exception e){
+            e.printStackTrace();
+            throw e;
+        }
+
+
+        Inventory updatedInventory = inventoryRepository.findByProductId(testProductId)
+                .orElseThrow();
+        assertThat(updatedInventory.getTotalQuantity()).isEqualTo(150);
 
     }
 

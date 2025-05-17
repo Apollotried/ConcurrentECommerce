@@ -12,4 +12,7 @@ public interface InventoryReservationRepository extends JpaRepository<InventoryR
     List<InventoryReservation> findByOrderId(UUID orderId);
 
     List<InventoryReservation> findByExpiresAtBefore(LocalDateTime cutoff);
+
+
+    boolean existsByProductIdAndExpiresAtAfter(Long productId, LocalDateTime now);
 }

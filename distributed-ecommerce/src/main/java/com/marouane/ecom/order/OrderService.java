@@ -5,7 +5,10 @@ import com.marouane.ecom.cart.CartItem;
 import com.marouane.ecom.cart.CartRepository;
 import com.marouane.ecom.exception.CartNotFoundException;
 import com.marouane.ecom.exception.EmptyCartException;
+import com.marouane.ecom.exception.PaymentFailedException;
 import com.marouane.ecom.inventory.InventoryService;
+import com.marouane.ecom.payment.PaymentResult;
+import com.marouane.ecom.payment.PaymentService;
 import com.marouane.ecom.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -25,6 +28,7 @@ public class OrderService {
     private final CartRepository cartRepository;
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
+    private final PaymentService paymentService;
 
     @Transactional
     public Order createOrderFromCart(Authentication connectedUser){
@@ -79,22 +83,43 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found"));
 
-
-        if (!order.getUser().getId().equals(user.getId())) {
-            throw new SecurityException("Unauthorized to cancel this order");
-        }
-
-        if (order.getStatus() != OrderStatus.PENDING) {
-            throw new IllegalStateException("Only pending orders can be cancelled");
-        }
-
-
-        for (OrderItem item : order.getItems()) {
-            inventoryService.releaseReservation(item.getProduct().getId(), item.getQuantity());
-        }
+        validateOrderCancellation(user, order);
+        inventoryService.releaseAllReservationsForOrder(order.getId());
 
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
     }
+
+    private void validateOrderCancellation(User user, Order order) {
+        if(!order.getUser().getId().equals(user.getId())) {
+            throw new SecurityException("Unauthorized to cancel this order");
+        }
+
+        if(order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException("Only pending orders can be cancelled");
+        }
+    }
+
+    @Transactional
+    public Order completeOrder(Authentication connectedUser, String paymentToken) {
+        Order order = createOrderFromCart(connectedUser);
+
+        PaymentResult result = paymentService.process(
+                order.getTotalAmount(),
+                paymentToken
+        );
+
+        if(!result.success()){
+            inventoryService.releaseAllReservationsForOrder(order.getId());
+            throw new PaymentFailedException(result.message());
+        }
+
+        order.setStatus(OrderStatus.PAID);
+        return orderRepository.save(order);
+
+    }
+
+
+
 
 }

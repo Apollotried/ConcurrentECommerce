@@ -18,4 +18,5 @@ public class ProductRequest {
     private String category;
     private BigDecimal price;
     private ProductStatus status;
+
 }
