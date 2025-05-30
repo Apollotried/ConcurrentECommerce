@@ -40,6 +40,21 @@ public class AuthenticationService {
 
     }
 
+    public void registerAdmin(RegistrationRequest request) {
+        var userRole = roleRepository.findByName("ADMIN")
+
+                .orElseThrow(() -> new RuntimeException("User role not found"));
+        var user = User.builder()
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .roles(List.of(userRole))
+                .build();
+        userRepository.save(user);
+
+    }
+
 
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         var auth = authenticationManager.authenticate(
