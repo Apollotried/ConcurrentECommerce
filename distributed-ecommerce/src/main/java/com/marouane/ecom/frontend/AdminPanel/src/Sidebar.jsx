@@ -26,20 +26,21 @@ function Sidebar({openSidebarToggle, OpenSidebar}) {
                 </a>
             </li>
             <li className='sidebar-list-item'>
+                <a href="/admin/inventory">
+                    <BsListCheck className='icon'/> Inventory
+                </a>
+            </li>
+            <li className='sidebar-list-item'>
                 <a href="/admin/category">
                     <BsFillGrid3X3GapFill className='icon'/> Categories
                 </a>
             </li>
             <li className='sidebar-list-item'>
-                <a href="">
+                <a href="/admin/customer">
                     <BsPeopleFill className='icon'/> Customers
                 </a>
             </li>
-            <li className='sidebar-list-item'>
-                <a href="">
-                    <BsListCheck className='icon'/> Inventory
-                </a>
-            </li>
+
             <li className='sidebar-list-item'>
                 <a href="">
                     <BsMenuButtonWideFill className='icon'/> Reports

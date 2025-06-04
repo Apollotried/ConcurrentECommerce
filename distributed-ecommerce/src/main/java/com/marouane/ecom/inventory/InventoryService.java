@@ -1,29 +1,28 @@
 package com.marouane.ecom.inventory;
 
+import com.marouane.ecom.common.PageResponse;
 import com.marouane.ecom.exception.*;
 import com.marouane.ecom.parser.StockUpdateRecord;
 import com.marouane.ecom.product.Product;
 import com.marouane.ecom.product.ProductRepository;
-import com.opencsv.bean.CsvToBean;
-import com.opencsv.bean.CsvToBeanBuilder;
-import com.opencsv.bean.HeaderColumnNameMappingStrategy;
+import com.marouane.ecom.product.ProductStatus;
+
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -60,6 +59,81 @@ public class InventoryService {
 
         return inventoryRepository.save(inventory);
     }
+
+
+
+    @Transactional(readOnly = true)
+    public PageResponse<InventoryResponseDto> getAllInventory(
+            int page,
+            int size,
+            String sortBy,
+            String sortDirection,
+            String searchTerm,
+            String stockLevel) {
+
+        // Create Sort object
+        Sort sort = Sort.by("createdAt").descending();
+        if (sortBy != null && sortDirection != null) {
+            sort = Sort.by(Sort.Direction.fromString(sortDirection), sortBy);
+        }
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // Build specification for filtering
+        Specification<Inventory> spec = Specification.where(null);
+
+        // Search by product name or category
+        if (searchTerm != null && !searchTerm.isEmpty()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.or(
+                            cb.like(cb.lower(root.get("product").get("name")), "%" + searchTerm.toLowerCase() + "%"),
+                            cb.like(root.get("product").get("category"), "%" + searchTerm + "%")
+                    )
+            );
+        }
+
+
+        // Filter by stock level
+        if (stockLevel != null && !stockLevel.equals("All")) {
+            switch (stockLevel) {
+                case "low":
+                    spec = spec.and((root, query, cb) ->
+                            cb.and(
+                                    cb.gt(root.get("totalQuantity"), 0),
+                                    cb.le(root.get("totalQuantity"), 4)
+                            )
+                    );
+                    break;
+                case "out":
+                    spec = spec.and((root, query, cb) ->
+                            cb.equal(root.get("totalQuantity"), 0)
+                    );
+                    break;
+                case "normal":
+                    spec = spec.and((root, query, cb) ->
+                            cb.gt(root.get("totalQuantity"), 4)
+                    );
+                    break;
+            }
+        }
+
+        Page<Inventory> inventoryPage = inventoryRepository.findAll(spec, pageable);
+
+        List<InventoryResponseDto> responses = inventoryPage.getContent().stream()
+                .map(inventoryMapper::toDto)
+                .toList();
+
+        return new PageResponse<>(
+                responses,
+                inventoryPage.getNumber(),
+                inventoryPage.getSize(),
+                (int) inventoryPage.getTotalElements(),
+                inventoryPage.getTotalPages(),
+                inventoryPage.isFirst(),
+                inventoryPage.isLast()
+        );
+    }
+
 
 
    @Transactional
@@ -225,6 +299,104 @@ public class InventoryService {
         inventory.addStock(update.getQuantity());
         inventoryRepository.save(inventory);
     }
+
+
+
+
+    @Transactional(readOnly = true)
+    public List<Product> getProductsWithLowStock(int threshold) {
+        return inventoryRepository.findByAvailableQuantityLessThan(threshold)
+                .stream()
+                .map(Inventory::getProduct)
+                .filter(product -> product.getStatus() == ProductStatus.ACTIVE)
+                .toList();
+    }
+
+
+    @Transactional(readOnly = true)
+    public long countProductsWithLowStock(int threshold) {
+        return inventoryRepository.countByAvailableQuantityLessThan(threshold);
+    }
+
+
+    public Integer getStockForProduct(Long productId) {
+        return inventoryRepository.findByProductId(productId)
+                .map(Inventory::getAvailableQuantity)
+                .orElse(0);
+    }
+
+
+
+    @Transactional(readOnly = true)
+    public long getTotalInventoryCount() {
+        return inventoryRepository.count();
+    }
+
+    @Transactional(readOnly = true)
+    public long getLowStockCount(int threshold) {
+        return inventoryRepository.countByAvailableQuantityLessThan(threshold);
+    }
+
+    @Transactional(readOnly = true)
+    public long getOutOfStockCount() {
+        return inventoryRepository.countByAvailableQuantity(0);
+    }
+
+    @Transactional(readOnly = true)
+    public long getInStockCount(int threshold) {
+        return inventoryRepository.countByAvailableQuantityGreaterThanEqual(threshold);
+    }
+
+    @Transactional
+    public InventoryResponseDto updateInventory(Long productId, int newQuantity) {
+        Inventory inventory = inventoryRepository.findByProductIdWithLock(productId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory not found with product id " + productId));
+
+        // Validate the new quantity
+        if (newQuantity < 0) {
+            throw new IllegalArgumentException("Quantity cannot be negative");
+        }
+
+        // Check if the new quantity is less than currently reserved stock
+        if (newQuantity < inventory.getTotalReserved()) {
+            throw new IllegalStateException("New quantity cannot be less than currently reserved stock");
+        }
+
+        inventory.setTotalQuantity(newQuantity);
+        Inventory updatedInventory = inventoryRepository.save(inventory);
+        return inventoryMapper.toDto(updatedInventory);
+    }
+
+
+    @Transactional
+    public void deleteInventory(Long productId) {
+        Inventory inventory = inventoryRepository.findByProductId(productId)
+                .orElseThrow(() -> new InventoryNotFoundException("Inventory not found with product id " + productId));
+
+        // Check if there are any active reservations
+        if (hasActiveReservations(productId)) {
+            throw new IllegalStateException("Cannot delete inventory with active reservations");
+        }
+
+        // Check if there's any reserved stock
+        if (inventory.getTotalReserved() > 0) {
+            throw new IllegalStateException("Cannot delete inventory with reserved stock");
+        }
+
+        inventoryRepository.delete(inventory);
+    }
+
+    @Transactional
+    public void deleteByProductId(Long productId) {
+        inventoryRepository.findByProductId(productId)
+                .ifPresent(inventoryRepository::delete);
+    }
+
+
+
+
+
+
 
 
 }

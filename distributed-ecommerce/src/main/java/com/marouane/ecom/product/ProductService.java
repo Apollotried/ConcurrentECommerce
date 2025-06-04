@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,24 +26,16 @@ public class ProductService {
 
     @Transactional
     public Product createProduct(ProductRequest request) {
-        Product product = Product.builder()
-                .name(request.getProductName())
-                .description(request.getDescription())
-                .category(request.getCategory())
-                .status(request.getStatus())
-                .versions(new ArrayList<>())
-                .build();
+        return productRepository.save(
+                Product.builder()
+                        .name(request.getProductName())
+                        .description(request.getDescription())
+                        .category(request.getCategory())
+                        .status(request.getStatus())
+                        .price(request.getPrice())
+                        .build()
+        );
 
-        Product savedProduct = productRepository.save(product);
-
-        ProductVersion productVersion = ProductVersion.builder()
-                .product(savedProduct)
-                .price(request.getPrice())
-                .isCurrent(true)
-                .build();
-        savedProduct.addVersion(productVersion);
-
-        return productRepository.save(savedProduct);
     }
 
     @Transactional
@@ -54,21 +47,7 @@ public class ProductService {
         product.setDescription(request.getDescription());
         product.setCategory(request.getCategory());
         product.setStatus(request.getStatus());
-
-
-        if (request.getPrice().compareTo(product.getPrice()) != 0) {
-
-            product.getVersions().forEach(v -> v.setCurrent(false));
-
-
-            ProductVersion newVersion = ProductVersion.builder()
-                    .product(product)
-                    .price(request.getPrice())
-                    .isCurrent(true)
-                    .build();
-
-            product.addVersion(newVersion);
-        }
+        product.setPrice(request.getPrice());
 
         return productRepository.save(product);
     }
@@ -87,23 +66,75 @@ public class ProductService {
         productRepository.save(product);
     }
 
+    @Transactional
+    public void hardDeleteProduct(Long productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
 
-    public PageResponse<ProductResponse> getAllProducts(int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<Product> products = productRepository.findAllByStatus(ProductStatus.ACTIVE, pageable);
+        if (inventoryService.hasActiveReservations(productId)) {
+            throw new ProductDeletionException(
+                    "Cannot delete product with active reservations");
+        }
 
-        List<ProductResponse> productResponses = products.stream()
+        inventoryService.deleteByProductId(productId);
+
+
+        productRepository.delete(product);
+    }
+
+
+    public PageResponse<ProductResponse> getAllProducts(
+            int page, int size,
+            String sortBy, String sortDir,
+            String search, String category,
+            ProductStatus status) {
+
+        // Create Sort object
+        Sort sort = Sort.by("createdAt").descending(); // default
+        if (sortBy != null && sortDir != null) {
+            sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+        }
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // Build specification for filtering
+        Specification<Product> spec = Specification.where(null);
+
+        if (search != null && !search.isEmpty()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.or(
+                            cb.like(cb.lower(root.get("name")), "%" + search.toLowerCase() + "%"),
+                            cb.like(cb.lower(root.get("description")), "%" + search.toLowerCase() + "%")
+                    )
+            );
+        }
+
+        if (category != null && !category.equals("All")) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("category"), category)
+            );
+        }
+
+        if (status != null) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("status"), status)
+            );
+        }
+
+        Page<Product> productPage = productRepository.findAll(spec, pageable);
+
+        List<ProductResponse> responses = productPage.getContent().stream()
                 .map(productMapper::toProductResponse)
                 .toList();
 
         return new PageResponse<>(
-                productResponses,
-                products.getNumber(),
-                products.getSize(),
-                (int) products.getTotalElements(),
-                products.getTotalPages(),
-                products.isFirst(),
-                products.isLast()
+                responses,
+                productPage.getNumber(),
+                productPage.getSize(),
+                (int) productPage.getTotalElements(),
+                productPage.getTotalPages(),
+                productPage.isFirst(),
+                productPage.isLast()
         );
     }
 
@@ -114,6 +145,45 @@ public class ProductService {
 
         return productMapper.toProductResponse(product);
     }
+
+    public long countAllProducts() {
+        return productRepository.count();
+    }
+
+    public long countActiveProducts() {
+        return productRepository.countByStatus(ProductStatus.ACTIVE);
+    }
+
+
+
+    public PageResponse<ProductResponse> getProductsWithoutInventory(int page, int size) {
+
+        Sort sort = Sort.by("createdAt").descending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Page<Product> productPage = productRepository.findProductsWithoutInventory(pageable);
+
+        List<ProductResponse> content = productPage
+                .getContent()
+                .stream()
+                .map(productMapper::toProductResponse)
+                .toList();
+
+        return new PageResponse<>(
+                content,
+                productPage.getNumber(),
+                productPage.getSize(),
+                (int) productPage.getTotalElements(),
+                productPage.getTotalPages(),
+                productPage.isFirst(),
+                productPage.isLast()
+        );
+    }
+
+
+
+
 
 
 

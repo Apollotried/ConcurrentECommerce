@@ -24,9 +24,9 @@ public class ProductVersion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne
-    @JsonBackReference
-    private Product product;
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JsonBackReference
+//    private Product product;
 
     @Column(nullable = false)
     private BigDecimal price;

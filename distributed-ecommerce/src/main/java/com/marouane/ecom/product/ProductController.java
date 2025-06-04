@@ -28,9 +28,15 @@ public class ProductController {
     }
 
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/{id}/soft")
     public ResponseEntity<Void> softDeleteProduct(@PathVariable Long id) {
         productService.softDeleteProduct(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/hard")
+    public ResponseEntity<Void> hardDeleteProduct(@PathVariable Long id) {
+        productService.hardDeleteProduct(id);
         return ResponseEntity.noContent().build();
     }
 
@@ -38,8 +44,13 @@ public class ProductController {
     @GetMapping
     public ResponseEntity<PageResponse<ProductResponse>> getAllProducts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        PageResponse<ProductResponse> productPageResponse = productService.getAllProducts(page, size);
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDir,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) ProductStatus status) {
+        PageResponse<ProductResponse> productPageResponse = productService.getAllProducts(page, size, sortBy, sortDir, search, category, status);
         return ResponseEntity.ok(productPageResponse);
     }
 
@@ -49,5 +60,25 @@ public class ProductController {
         ProductResponse productResponse = productService.getProductById(id);
         return ResponseEntity.ok(productResponse);
     }
+
+    @GetMapping("/activeCount")
+    public long countActiveProducts() {
+        return productService.countActiveProducts();
+    }
+
+    @GetMapping("/count")
+    public long countAllProducts() {
+        return productService.countAllProducts();
+    }
+
+
+    @GetMapping("/no-inventory")
+    public ResponseEntity<PageResponse<ProductResponse>> getProductsWithoutInventory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return ResponseEntity.ok(productService.getProductsWithoutInventory(page, size));
+    }
+
 
 }

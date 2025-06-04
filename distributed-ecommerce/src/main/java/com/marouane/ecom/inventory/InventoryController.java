@@ -7,9 +7,12 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.marouane.ecom.common.PageResponse;
+
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/inventory")
@@ -34,6 +37,19 @@ public class InventoryController {
         return ResponseEntity.ok(inventory);
     }
 
+    @GetMapping
+    public ResponseEntity<PageResponse<InventoryResponseDto>> getAllInventory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDirection,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String stockLevel
+    ) {
+        return ResponseEntity.ok(inventoryService.getAllInventory(
+                page, size, sortBy, sortDirection, search, stockLevel
+        ));
+    }
 
     @GetMapping("/{productId}/available")
     public ResponseEntity<Boolean> isAvailable(
@@ -84,5 +100,43 @@ public class InventoryController {
             return ResponseEntity.internalServerError()
                     .body("Failed to process file: " + e.getMessage());
         }
+    }
+
+
+
+
+
+    @GetMapping("/low-stock/count")
+    public long getLowStockProductCount(@RequestParam(defaultValue = "5") int threshold) {
+        return inventoryService.countProductsWithLowStock(threshold);
+    }
+
+
+    @GetMapping("/counts")
+    public ResponseEntity<Map<String, Long>> getAllInventoryCounts(
+            @RequestParam(defaultValue = "5") int lowStockThreshold) {
+        Map<String, Long> counts = Map.of(
+                "total", inventoryService.getTotalInventoryCount(),
+                "lowStock", inventoryService.getLowStockCount(lowStockThreshold),
+                "outOfStock", inventoryService.getOutOfStockCount(),
+                "inStock", inventoryService.getInStockCount(lowStockThreshold)
+        );
+        return ResponseEntity.ok(counts);
+    }
+
+
+
+    @PutMapping("/{productId}")
+    public ResponseEntity<InventoryResponseDto> updateInventory(
+            @PathVariable Long productId,
+            @RequestParam int newQuantity) {
+        InventoryResponseDto updatedInventory = inventoryService.updateInventory(productId, newQuantity);
+        return ResponseEntity.ok(updatedInventory);
+    }
+
+    @DeleteMapping("/{productId}")
+    public ResponseEntity<Void> deleteInventory(@PathVariable Long productId) {
+        inventoryService.deleteInventory(productId);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -427,3 +427,153 @@
         font-size: 14px;
     }
 }
+
+.modal-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 20px;
+    padding: 10px;
+    font-size: 16px;
+    color: #333;
+}
+
+.modal-pagination button {
+    background-color: #007bff;
+    color: black;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.modal-pagination button:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+.modal-pagination button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.modal-pagination span {
+    font-weight: 500;
+}
+
+
+/* Selected Product Section */
+.selected-product {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid #4a6bff;
+}
+
+.selected-product h4 {
+    margin: 0 0 0.5rem 0;
+    color: #2c3e50;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.selected-product p {
+    margin: 0 0 1rem 0;
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.change-btn {
+    background-color: #e9ecef;
+    color: #495057;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.change-btn:hover {
+    background-color: #dee2e6;
+}
+
+/* Form Group */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #2c3e50;
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.15s ease;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: #4a6bff;
+    box-shadow: 0 0 0 2px rgba(74, 107, 255, 0.2);
+}
+
+/* Modal Footer */
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e9ecef;
+    margin-top: 1.5rem;
+}
+
+.modal-footer button {
+    padding: 0.65rem 1.25rem;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.modal-footer button:first-child {
+    background-color: transparent;
+    color: #6c757d;
+    border: 1px solid #dee2e6;
+}
+
+.modal-footer button:first-child:hover {
+    background-color: #f8f9fa;
+}
+
+.modal-footer button.primary {
+    background-color: #4a6bff;
+    color: white;
+    border: none;
+}
+
+.modal-footer button.primary:hover {
+    background-color: #3a5bef;
+}
+
+.modal-footer button.primary:disabled {
+    background-color: #b0b9ff;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.pagination button {
+    color: black;
+}

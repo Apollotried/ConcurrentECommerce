@@ -9,6 +9,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Entity
@@ -40,37 +41,61 @@ public class Product {
     @UpdateTimestamp
     private LocalDateTime updatedAt;
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
-    @JsonManagedReference
-    private List<ProductVersion> versions;
-
-
     @Version
     @JsonIgnore
     private int version;
 
+    private BigDecimal price;
 
 
-    @Transient
-    public ProductVersion getCurrentVersion() {
-        return versions.stream()
-                .filter(ProductVersion::isCurrent)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No active version found"));
-    }
 
 
-    public BigDecimal getPrice() {
-        return getCurrentVersion().getPrice();
-    }
 
 
-    public void addVersion(ProductVersion newVersion) {
-        this.versions.forEach(v -> v.setCurrent(false));
+    //    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
+//    @JsonManagedReference
+//    private List<ProductVersion> versions;
 
-        newVersion.setCurrent(true);
-        this.versions.add(newVersion);
-    }
+//    @PrePersist
+//    public void initializeVersion() {
+//        if (this.versions == null) {
+//            this.versions = new ArrayList<>();
+//        }
+//
+//
+//        if (this.versions.isEmpty()) {
+//            ProductVersion initialVersion = ProductVersion.builder()
+//                    .product(this)
+//                    .price(BigDecimal.ZERO)
+//                    .isCurrent(true)
+//                    .build();
+//            this.versions.add(initialVersion);
+//        }
+//    }
+
+//    @Transient
+//    public ProductVersion getCurrentVersion() {
+//        return versions.stream()
+//                .filter(ProductVersion::isCurrent)
+//                .findFirst()
+//                .orElse(null);
+//    }
+
+//    @JsonIgnore
+//    public BigDecimal getPrice() {
+//        ProductVersion current = getCurrentVersion();
+//        return current != null ? current.getPrice() : null;
+//    }
+//
+//
+//
+//    public void addVersion(ProductVersion newVersion) {
+//        this.versions.forEach(v -> v.setCurrent(false));
+//
+//        newVersion.setCurrent(true);
+//        newVersion.setProduct(this);
+//        this.versions.add(newVersion);
+//    }
 
     }
 

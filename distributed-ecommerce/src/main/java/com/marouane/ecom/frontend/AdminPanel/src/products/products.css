@@ -193,12 +193,18 @@
 }
 
 .edit {
-    background-color: #f0ad4e;
+    background-color: #5cb85c;
     color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 2px;
+    transition: background-color 0.3s ease;
 }
 
 .edit:hover {
-    background-color: #ec971f;
+    background-color: #449d44;
 }
 
 .delete {
@@ -210,6 +216,22 @@
     background-color: #c9302c;
 }
 
+
+.discontinue {
+    background-color: #f0ad4e;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 2px;
+}
+
+.discontinue:hover {
+    background-color: #ec971f;
+}
+
+
 .view {
     background-color: #5bc0de;
     color: white;
@@ -219,15 +241,6 @@
     background-color: #46b8da;
 }
 
-/* Low stock warning */
-.low-stock {
-    background-color: #fff3f3;
-}
-
-.low-stock td {
-    color: #d32f2f;
-    font-weight: 500;
-}
 
 /* No results message */
 .no-results {
@@ -404,6 +417,74 @@
     .form-row {
         flex-direction: column;
         gap: 0;
+    }
+}
+
+
+/* Enhanced Pagination */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin: 25px 0;
+    flex-wrap: wrap;
+}
+
+.pagination button {
+    background-color: #5bc0de; /* Blue - different from action buttons */
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 20px; /* Rounded pills */
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    min-width: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.pagination button:hover:not(:disabled) {
+    background-color: #31b0d5;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+
+.pagination button:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.pagination button:disabled {
+    background-color: #e0e0e0;
+    color: #a0a0a0;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.pagination span {
+    font-size: 14px;
+    color: #666;
+    margin: 0 10px;
+    font-weight: 500;
+}
+
+/* Optional icon styles */
+.pagination .icon {
+    font-size: 12px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+    .pagination {
+        gap: 8px;
+    }
+    .pagination button {
+        padding: 6px 12px;
+        min-width: auto;
     }
 }
 

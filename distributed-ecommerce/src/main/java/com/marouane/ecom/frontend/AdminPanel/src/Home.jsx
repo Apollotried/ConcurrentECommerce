@@ -1,12 +1,29 @@
-import React from 'react'
-import 
+import React, { useEffect, useState } from 'react'
+import
 { BsFillArchiveFill, BsFillGrid3X3GapFill, BsPeopleFill, BsFillBellFill}
  from 'react-icons/bs'
  import 
  { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } 
  from 'recharts';
+import {fetchProductCount} from "./api/productApi.js";
+
 
 function Home() {
+    const [productCount, setProductCount] = useState(0);
+
+    useEffect(() => {
+        const getProductCount = async () => {
+            try {
+                const count = await fetchProductCount();
+                setProductCount(count);
+            }catch (error){
+                console.error("Error fetching product count:", error);
+            }
+        }
+
+
+        getProductCount();
+    }, [])
 
     const data = [
         {
@@ -66,7 +83,7 @@ function Home() {
                     <h3>PRODUCTS</h3>
                     <BsFillArchiveFill className='card_icon'/>
                 </div>
-                <h1>300</h1>
+                <h1>{productCount}</h1>
             </div>
             <div className='card'>
                 <div className='card-inner'>

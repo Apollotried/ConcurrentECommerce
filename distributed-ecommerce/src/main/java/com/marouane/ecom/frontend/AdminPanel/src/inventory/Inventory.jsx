@@ -1,216 +1,196 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './inventory.css';
+import {
+    fetchInventoryCounts,
+    fetchAllInventory, deleteProductInventory, updateInventoryQuantity, createInventory
+} from '../api/inventoryApi';
+import {getProductsWithoutInventory} from "../api/productApi.js";
+
 
 const Inventory = () => {
-    // Sample inventory data
-    const [inventory, setInventory] = useState([
-        {
-            id: 1,
-            productId: 'PROD-001',
-            name: 'Wireless Headphones',
-            sku: 'WH-1000XM4',
-            category: 'Electronics',
-            currentStock: 45,
-            available: 42,
-            reserved: 3,
-            lowStockThreshold: 10,
-            status: 'In Stock',
-            location: 'A12-4',
-            lastUpdated: '2023-11-15'
-        },
-        {
-            id: 2,
-            productId: 'PROD-002',
-            name: 'Yoga Mat',
-            sku: 'YG-200-PRO',
-            category: 'Fitness',
-            currentStock: 8,
-            available: 8,
-            reserved: 0,
-            lowStockThreshold: 5,
-            status: 'Low Stock',
-            location: 'B05-2',
-            lastUpdated: '2023-11-14'
-        },
-        {
-            id: 3,
-            productId: 'PROD-003',
-            name: 'Smart Watch',
-            sku: 'SW-G4-BLK',
-            category: 'Electronics',
-            currentStock: 0,
-            available: 0,
-            reserved: 0,
-            lowStockThreshold: 5,
-            status: 'Out of Stock',
-            location: 'C08-1',
-            lastUpdated: '2023-11-10'
-        },
-        {
-            id: 4,
-            productId: 'PROD-004',
-            name: 'Coffee Maker',
-            sku: 'CM-5000XL',
-            category: 'Home Appliances',
-            currentStock: 25,
-            available: 22,
-            reserved: 3,
-            lowStockThreshold: 10,
-            status: 'In Stock',
-            location: 'D10-2',
-            lastUpdated: '2023-11-12'
-        },
-        {
-            id: 5,
-            productId: 'PROD-005',
-            name: 'Running Shoes',
-            sku: 'RS-AM270-BLK',
-            category: 'Footwear',
-            currentStock: 120,
-            available: 115,
-            reserved: 5,
-            lowStockThreshold: 20,
-            status: 'In Stock',
-            location: 'E15-3',
-            lastUpdated: '2023-11-13'
-        }
-    ]);
+    const [inventory, setInventory] = useState([]);
+    const [currentPage, setCurrentPage] = useState(0);
+    const [size] = useState(5);
+    const [totalPages, setTotalPages] = useState(0);
 
-    // State for modals and forms
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [showStockModal, setShowStockModal] = useState(false);
-    const [currentItem, setCurrentItem] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('All');
-    const [selectedStatus, setSelectedStatus] = useState('All');
-    const [sortConfig, setSortConfig] = useState({ key: 'productId', direction: 'ascending' });
-    const [stockAdjustment, setStockAdjustment] = useState({
-        type: 'add',
-        quantity: '',
-        reason: '',
-        notes: ''
+
+    const [counts, setCounts] = useState({
+        total: 0,
+        lowStock: 0,
+        outOfStock: 0,
+        inStock: 0
     });
 
-    // Get unique categories for filter dropdown
-    const categories = ['All', ...new Set(inventory.map(item => item.category))];
 
-    // Add new inventory item
-    const handleAddItem = (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const newItem = {
-            id: inventory.length + 1,
-            productId: form.elements.productId.value,
-            name: form.elements.name.value,
-            sku: form.elements.sku.value,
-            category: form.elements.category.value,
-            currentStock: parseInt(form.elements.currentStock.value),
-            available: parseInt(form.elements.currentStock.value),
-            reserved: 0,
-            lowStockThreshold: parseInt(form.elements.lowStockThreshold.value),
-            status: parseInt(form.elements.currentStock.value) > parseInt(form.elements.lowStockThreshold.value)
-                ? 'In Stock'
-                : parseInt(form.elements.currentStock.value) > 0
-                    ? 'Low Stock'
-                    : 'Out of Stock',
-            location: form.elements.location.value,
-            lastUpdated: new Date().toISOString().split('T')[0]
-        };
-        setInventory([...inventory, newItem]);
-        setShowAddModal(false);
-    };
 
-    // Edit inventory item
-    const handleEditItem = (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const updatedItem = {
-            ...currentItem,
-            productId: form.elements.productId.value,
-            name: form.elements.name.value,
-            sku: form.elements.sku.value,
-            category: form.elements.category.value,
-            lowStockThreshold: parseInt(form.elements.lowStockThreshold.value),
-            location: form.elements.location.value,
-            status: currentItem.currentStock > parseInt(form.elements.lowStockThreshold.value)
-                ? 'In Stock'
-                : currentItem.currentStock > 0
-                    ? 'Low Stock'
-                    : 'Out of Stock'
-        };
-        setInventory(inventory.map(item => item.id === currentItem.id ? updatedItem : item));
-        setShowEditModal(false);
-    };
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [currentItem, setCurrentItem] = useState(null);
 
-    // Adjust stock levels
-    const handleAdjustStock = (e) => {
-        e.preventDefault();
-        const adjustment = stockAdjustment.type === 'add'
-            ? parseInt(stockAdjustment.quantity)
-            : -parseInt(stockAdjustment.quantity);
 
-        const updatedItem = {
-            ...currentItem,
-            currentStock: currentItem.currentStock + adjustment,
-            available: currentItem.available + (stockAdjustment.type === 'add'
-                ? parseInt(stockAdjustment.quantity)
-                : -parseInt(stockAdjustment.quantity)),
-            status: currentItem.currentStock + adjustment > currentItem.lowStockThreshold
-                ? 'In Stock'
-                : currentItem.currentStock + adjustment > 0
-                    ? 'Low Stock'
-                    : 'Out of Stock',
-            lastUpdated: new Date().toISOString().split('T')[0]
-        };
+    const [filters, setFilters] = useState({
+        searchTerm: '',
+        stockLevel: 'All',
+        sortBy: 'createdAt',
+        sortDirection: 'desc'
+    });
 
-        setInventory(inventory.map(item => item.id === currentItem.id ? updatedItem : item));
-        setShowStockModal(false);
-        setStockAdjustment({
-            type: 'add',
-            quantity: '',
-            reason: '',
-            notes: ''
+
+    const [availableProducts, setAvailableProducts] = useState([]);
+    const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+
+    const [selectedProduct, setSelectedProduct] = useState(null);
+
+    const handleProductSelection = (product) => {
+        setSelectedProduct(product);
+        setNewInventoryItem({
+            productId: product.id,
+            quantity: '0'
         });
     };
 
-    // Delete inventory item
-    const handleDeleteItem = (id) => {
-        if (window.confirm('Are you sure you want to delete this inventory item?')) {
-            setInventory(inventory.filter(item => item.id !== id));
+
+    const loadInventories = async () => {
+        try {
+            const inventoryData = await fetchAllInventory(
+                currentPage,
+                size,
+                filters.sortBy,
+                filters.sortDirection,
+                filters.searchTerm,
+                filters.stockLevel
+            );
+
+            setInventory(inventoryData.content);
+            setTotalPages(inventoryData.totalPages);
+
+        } catch (error) {
+            console.error("Error fetching products:", error);
         }
     };
 
-    // Handle sorting
+
+    const [availablePage, setAvailablePage] = useState(0);
+    const [availableSize] = useState(4);
+    const [availableTotalPages, setAvailableTotalPages] = useState(0);
+
+
+
+
+    useEffect(() => {
+        const loadInitialData = async () => {
+            await Promise.all([
+                loadInventories(),
+                fetchInventoryCounts().then(setCounts)
+            ]);
+        };
+
+        loadInitialData();
+
+    }, [currentPage, size, filters]);
+
+    useEffect(() => {
+        const loadAvailableProducts = async () => {
+            if (showAddModal) {
+                setIsLoadingProducts(true);
+                try {
+                    const res  = await getProductsWithoutInventory(availablePage, availableSize);
+                    setAvailableProducts(res.content);
+                    setAvailableTotalPages(res.totalPages);
+                } catch (error) {
+                    console.error("Error loading available products:", error);
+                } finally {
+                    setIsLoadingProducts(false);
+                }
+            }
+        };
+        loadAvailableProducts();
+    }, [showAddModal, availablePage]);
+
+
+
     const handleSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
-        setSortConfig({ key, direction });
+        setFilters(prev => ({
+            ...prev,
+            sortBy: key,
+            sortDirection:
+                prev.sortBy === key && prev.sortDirection === 'asc'
+                    ? 'desc'
+                    : 'asc'
+        }));
+        setCurrentPage(0)
     };
 
-    // Sort inventory
-    const sortedInventory = [...inventory].sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-            return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-            return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-    });
 
-    // Filter inventory
-    const filteredInventory = sortedInventory.filter(item => {
-        const matchesSearch =
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.productId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            item.sku.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
-        const matchesStatus = selectedStatus === 'All' || item.status === selectedStatus;
-        return matchesSearch && matchesCategory && matchesStatus;
+    const handlePageChange = (newPage) => {
+        if (newPage >= 0 && newPage < totalPages) {
+            setCurrentPage(newPage);
+        }
+    };
+
+    const [newInventoryItem, setNewInventoryItem] = useState({
+        productId: '',
+        quantity: ''
     });
+    const [editQuantity, setEditQuantity] = useState('');
+
+    const handleAddInventory = async () => {
+        try {
+            await createInventory(parseInt(newInventoryItem.productId), parseInt(newInventoryItem.quantity));
+            // Refresh data
+            await loadInventories();
+
+            setShowAddModal(false);
+            setNewInventoryItem({ productId: '', quantity: '' });
+
+            const countsData = await fetchInventoryCounts();
+            setCounts(countsData);
+        } catch (error) {
+            console.error('Error adding inventory:', error);
+            alert('Failed to add inventory: ' + error.message);
+        }
+    };
+
+    const handleUpdateInventory = async () => {
+        try {
+            await updateInventoryQuantity(currentItem.productId, parseInt(editQuantity));
+            // Refresh data
+            await loadInventories();
+
+            const countsData = await fetchInventoryCounts();
+            setCounts(countsData);
+            setShowEditModal(false);
+        } catch (error) {
+            console.error('Error updating inventory:', error);
+            alert('Failed to update inventory: ' + error.message);
+        }
+    };
+
+    const handleDeleteItem = async (productId) => {
+        if (window.confirm('Are you sure you want to delete this inventory item?')) {
+            try {
+                await deleteProductInventory(productId);
+                // Refresh data
+                await loadInventories();
+
+                const countsData = await fetchInventoryCounts();
+                setCounts(countsData);
+            } catch (error) {
+                console.error('Error deleting inventory:', error);
+                alert('Failed to delete inventory: ' + error.message);
+            }
+        }
+    };
+
+    const handleFilterChange = (filterName, value) => {
+        setFilters(prev => ({
+            ...prev,
+            [filterName]: value
+        }));
+        setCurrentPage(0);
+    };
+
 
     return (
         <div className="inventory-container">
@@ -220,28 +200,30 @@ const Inventory = () => {
                     <input
                         type="text"
                         placeholder="Search inventory..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        value={filters.searchTerm}
+                        onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
                     />
+
                     <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        value={filters.stockLevel}
+                        onChange={(e) =>
+                            setFilters((prev) => ({...prev, stockLevel: e.target.value}))
+                        }
                     >
-                        {categories.map(category => (
-                            <option key={category} value={category}>{category}</option>
-                        ))}
+                        <option value="All">All</option>
+                        <option value="low">Low Stock</option>
+                        <option value="out">Out of Stock </option>
+                        <option value="normal">normal Stock</option>
                     </select>
-                    <select
-                        value={selectedStatus}
-                        onChange={(e) => setSelectedStatus(e.target.value)}
-                    >
-                        <option value="All">All Statuses</option>
-                        <option value="In Stock">In Stock</option>
-                        <option value="Low Stock">Low Stock</option>
-                        <option value="Out of Stock">Out of Stock</option>
-                    </select>
+
+
                     <button
-                        onClick={() => setShowAddModal(true)}
+                        onClick={() => {
+                            setShowAddModal(true);
+                            setSelectedProduct(null);
+                            setNewInventoryItem({productId: '', quantity: ''});
+                            setAvailablePage(0);
+                        }}
                         className="add-item-btn"
                     >
                         + Add Item
@@ -252,19 +234,19 @@ const Inventory = () => {
             <div className="inventory-stats">
                 <div className="stat-card">
                     <h3>Total Items</h3>
-                    <p>{inventory.length}</p>
+                    <p>{counts.total}</p>
                 </div>
                 <div className="stat-card">
                     <h3>In Stock</h3>
-                    <p>{inventory.filter(item => item.status === 'In Stock').length}</p>
+                    <p>{counts.inStock}</p>
                 </div>
                 <div className="stat-card">
                     <h3>Low Stock</h3>
-                    <p>{inventory.filter(item => item.status === 'Low Stock').length}</p>
+                    <p>{counts.lowStock}</p>
                 </div>
                 <div className="stat-card warning">
                     <h3>Out of Stock</h3>
-                    <p>{inventory.filter(item => item.status === 'Out of Stock').length}</p>
+                    <p>{counts.outOfStock}</p>
                 </div>
             </div>
 
@@ -273,64 +255,36 @@ const Inventory = () => {
                     <thead>
                     <tr>
                         <th onClick={() => handleSort('productId')}>
-                            Product ID {sortConfig.key === 'productId' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                            Product ID {filters.sortBy === 'productId' && (filters.sortDirection === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th onClick={() => handleSort('name')}>
-                            Product Name {sortConfig.key === 'name' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                        <th onClick={() => handleSort('product.name')}>
+                            Product
+                            Name {filters.sortBy === 'product.name' && (filters.sortDirection === 'asc' ? '↑' : '↓')}
                         </th>
-                        <th onClick={() => handleSort('sku')}>
-                            SKU {sortConfig.key === 'sku' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                        <th onClick={() => handleSort('category')}>
-                            Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                        <th onClick={() => handleSort('currentStock')}>
-                            Stock {sortConfig.key === 'currentStock' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
+                        <th onClick={() => handleSort('totalQuantity')}>
+                            Stock {filters.sortBy === 'totalQuantity' && (filters.sortDirection === 'asc' ? '↑' : '↓')}
                         </th>
                         <th>Available</th>
                         <th>Reserved</th>
-                        <th onClick={() => handleSort('status')}>
-                            Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
-                        <th onClick={() => handleSort('location')}>
-                            Location {sortConfig.key === 'location' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}
-                        </th>
                         <th>Actions</th>
                     </tr>
                     </thead>
                     <tbody>
-                    {filteredInventory.length > 0 ? (
-                        filteredInventory.map(item => (
-                            <tr key={item.id} className={`status-${item.status.toLowerCase().replace(' ', '-')}`}>
+                    {inventory.length > 0 ? (
+                        inventory.map(item => (
+                            <tr key={item.id}>
                                 <td>{item.productId}</td>
-                                <td>{item.name}</td>
-                                <td>{item.sku}</td>
-                                <td>{item.category}</td>
+                                <td>{item.productName}</td>
                                 <td>
-                                    {item.currentStock}
-                                    {item.currentStock < item.lowStockThreshold && (
-                                        <span className="threshold-warning"> (Threshold: {item.lowStockThreshold})</span>
+                                    {item.totalQuantity}
+                                    {item.totalQuantity < 5 && (
+                                        <span className="threshold-warning"> (Low)</span>
                                     )}
                                 </td>
-                                <td>{item.available}</td>
-                                <td>{item.reserved}</td>
+                                <td>{item.availableQuantity}</td>
+                                <td>{item.totalReserved}</td>
                                 <td>
-                    <span className={`status-badge ${item.status.toLowerCase().replace(' ', '-')}`}>
-                      {item.status}
-                    </span>
-                                </td>
-                                <td>{item.location}</td>
-                                <td>
-                                    <div className="action-buttons">
-                                        <button
-                                            className="adjust-stock"
-                                            onClick={() => {
-                                                setCurrentItem(item);
-                                                setShowStockModal(true);
-                                            }}
-                                        >
-                                            Adjust
-                                        </button>
+                                <div className="action-buttons">
                                         <button
                                             className="edit"
                                             onClick={() => {
@@ -342,7 +296,7 @@ const Inventory = () => {
                                         </button>
                                         <button
                                             className="delete"
-                                            onClick={() => handleDeleteItem(item.id)}
+                                            onClick={() => handleDeleteItem(item.productId)}
                                         >
                                             Delete
                                         </button>
@@ -352,73 +306,161 @@ const Inventory = () => {
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="10" className="no-results">No inventory items found</td>
+                            <td colSpan="8" className="no-results">No inventory items found</td>
                         </tr>
                     )}
                     </tbody>
                 </table>
             </div>
 
-            {/* Add Inventory Modal */}
+            {totalPages > 1 && (
+                <div className="pagination">
+                    <button
+                        onClick={() => handlePageChange(currentPage - 1)}
+                        disabled={currentPage === 0}
+                    >
+                        Previous
+                    </button>
+                    <span>Page {currentPage + 1} of {totalPages}</span>
+                    <button
+                        onClick={() => handlePageChange(currentPage + 1)}
+                        disabled={currentPage >= totalPages - 1}
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+
             {showAddModal && (
                 <div className="modal-overlay">
-                    <div className="modal">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h3>Add New Inventory Item</h3>
-                                <button
-                                    className="close-btn"
-                                    onClick={() => setShowAddModal(false)}
-                                >
-                                    ×
-                                </button>
-                            </div>
-                            <form onSubmit={handleAddItem}>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Product ID *</label>
-                                        <input type="text" name="productId" required />
+                    <div className="modal" style={{ width: '80%', maxWidth: '1000px' }}>
+                        <div className="modal-header">
+                            <h3>Add New Inventory Item</h3>
+                            <button onClick={() => {
+                                setShowAddModal(false);
+                                setSelectedProduct(null);
+                                setNewInventoryItem({ productId: '', quantity: '' });
+                            }}>×</button>
+                        </div>
+
+                        <div className="modal-body">
+                            {!selectedProduct ? (
+                                <>
+                                    <h4>Select a Product</h4>
+                                    <div className="table-responsive">
+                                        <table className="products-table">
+                                            <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Name</th>
+                                                <th>Category</th>
+                                                <th>Price</th>
+                                                <th>Status</th>
+                                                <th>Action</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody>
+                                            {isLoadingProducts ? (
+                                                <tr>
+                                                    <td colSpan="6">Loading products...</td>
+                                                </tr>
+                                            ) : availableProducts.length > 0 ? (
+                                                availableProducts.map(product => (
+                                                    <tr key={product.id}>
+                                                        <td>{product.id}</td>
+                                                        <td>{product.name}</td>
+                                                        <td>{product.category}</td>
+                                                        <td>${product.price?.toFixed(2)}</td>
+                                                        <td>
+                                                                <span className={`status-badge ${product.status?.toLowerCase()}`}>
+                                                                    {product.status}
+                                                                </span>
+                                                        </td>
+                                                        <td>
+                                                            <button
+                                                                className="select-btn"
+                                                                onClick={() => handleProductSelection(product)}
+                                                            >
+                                                                Select
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="6" className="no-results">
+                                                        No available products found
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    <div className="form-group">
-                                        <label>SKU *</label>
-                                        <input type="text" name="sku" required />
+
+                                    {availableTotalPages > 1 && (
+                                        <div className="modal-pagination">
+                                            <button
+                                                onClick={() => setAvailablePage(p => Math.max(0, p - 1))}
+                                                disabled={availablePage === 0}
+                                            >
+                                                Previous
+                                            </button>
+                                            <span>Page {availablePage + 1} of {availableTotalPages}</span>
+                                            <button
+                                                onClick={() => setAvailablePage(p => p + 1)}
+                                                disabled={availablePage >= availableTotalPages - 1}
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <div className="selected-product">
+                                        <h4>Selected Product: {selectedProduct.name}</h4>
+                                        <p>Category: {selectedProduct.category}</p>
+                                        <button
+                                            className="change-btn"
+                                            onClick={() => setSelectedProduct(null)}
+                                        >
+                                            Change Product
+                                        </button>
                                     </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>Product Name *</label>
-                                    <input type="text" name="name" required />
-                                </div>
-                                <div className="form-row">
+
                                     <div className="form-group">
-                                        <label>Category *</label>
-                                        <input type="text" name="category" required />
+                                        <label>Initial Quantity:</label>
+                                        <input
+                                            type="number"
+                                            value={newInventoryItem.quantity}
+                                            onChange={(e) => setNewInventoryItem({
+                                                ...newInventoryItem,
+                                                quantity: e.target.value
+                                            })}
+                                            placeholder="Enter initial quantity"
+                                            min="0"
+                                            required
+                                        />
                                     </div>
-                                    <div className="form-group">
-                                        <label>Initial Stock *</label>
-                                        <input type="number" name="currentStock" min="0" required />
+
+                                    <div className="modal-footer">
+                                        <button onClick={() => {
+                                            setShowAddModal(false);
+                                            setSelectedProduct(null);
+                                            setNewInventoryItem({ productId: '', quantity: '' });
+                                        }}>
+                                            Cancel
+                                        </button>
+                                        <button
+                                            onClick={handleAddInventory}
+                                            className="primary"
+                                            disabled={!newInventoryItem.quantity}
+                                        >
+                                            Add Inventory
+                                        </button>
                                     </div>
-                                </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Low Stock Threshold *</label>
-                                        <input type="number" name="lowStockThreshold" min="1" required />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Location *</label>
-                                        <input type="text" name="location" required />
-                                    </div>
-                                </div>
-                                <div className="modal-actions">
-                                    <button type="submit" className="submit-btn">Add Item</button>
-                                    <button
-                                        type="button"
-                                        className="cancel-btn"
-                                        onClick={() => setShowAddModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -428,186 +470,33 @@ const Inventory = () => {
             {showEditModal && currentItem && (
                 <div className="modal-overlay">
                     <div className="modal">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h3>Edit Inventory Item</h3>
-                                <button
-                                    className="close-btn"
-                                    onClick={() => setShowEditModal(false)}
-                                >
-                                    ×
-                                </button>
-                            </div>
-                            <form onSubmit={handleEditItem}>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Product ID *</label>
-                                        <input
-                                            type="text"
-                                            name="productId"
-                                            defaultValue={currentItem.productId}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>SKU *</label>
-                                        <input
-                                            type="text"
-                                            name="sku"
-                                            defaultValue={currentItem.sku}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>Product Name *</label>
-                                    <input
-                                        type="text"
-                                        name="name"
-                                        defaultValue={currentItem.name}
-                                        required
-                                    />
-                                </div>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Category *</label>
-                                        <input
-                                            type="text"
-                                            name="category"
-                                            defaultValue={currentItem.category}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Low Stock Threshold *</label>
-                                        <input
-                                            type="number"
-                                            name="lowStockThreshold"
-                                            min="1"
-                                            defaultValue={currentItem.lowStockThreshold}
-                                            required
-                                        />
-                                    </div>
-                                </div>
-                                <div className="form-group">
-                                    <label>Location *</label>
-                                    <input
-                                        type="text"
-                                        name="location"
-                                        defaultValue={currentItem.location}
-                                        required
-                                    />
-                                </div>
-                                <div className="modal-actions">
-                                    <button type="submit" className="submit-btn">Save Changes</button>
-                                    <button
-                                        type="button"
-                                        className="cancel-btn"
-                                        onClick={() => setShowEditModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
+                        <div className="modal-header">
+                            <h3>Edit Inventory for {currentItem.productName}</h3>
+                            <button onClick={() => setShowEditModal(false)}>×</button>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Stock Adjustment Modal */}
-            {showStockModal && currentItem && (
-                <div className="modal-overlay">
-                    <div className="modal">
-                        <div className="modal-content">
-                            <div className="modal-header">
-                                <h3>Adjust Stock: {currentItem.name}</h3>
-                                <button
-                                    className="close-btn"
-                                    onClick={() => setShowStockModal(false)}
-                                >
-                                    ×
-                                </button>
+                        <div className="modal-body">
+                            <div className="form-group">
+                                <label>Current Quantity: {currentItem.totalQuantity}</label>
                             </div>
-                            <form onSubmit={handleAdjustStock}>
-                                <div className="stock-info">
-                                    <div className="info-row">
-                                        <span>Current Stock:</span>
-                                        <span>{currentItem.currentStock}</span>
-                                    </div>
-                                    <div className="info-row">
-                                        <span>Available:</span>
-                                        <span>{currentItem.available}</span>
-                                    </div>
-                                    <div className="info-row">
-                                        <span>Reserved:</span>
-                                        <span>{currentItem.reserved}</span>
-                                    </div>
-                                    <div className="info-row">
-                                        <span>Low Stock Threshold:</span>
-                                        <span>{currentItem.lowStockThreshold}</span>
-                                    </div>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Adjustment Type *</label>
-                                    <select
-                                        value={stockAdjustment.type}
-                                        onChange={(e) => setStockAdjustment({...stockAdjustment, type: e.target.value})}
-                                        required
-                                    >
-                                        <option value="add">Add Stock</option>
-                                        <option value="remove">Remove Stock</option>
-                                    </select>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Quantity *</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        value={stockAdjustment.quantity}
-                                        onChange={(e) => setStockAdjustment({...stockAdjustment, quantity: e.target.value})}
-                                        required
-                                    />
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Reason *</label>
-                                    <select
-                                        value={stockAdjustment.reason}
-                                        onChange={(e) => setStockAdjustment({...stockAdjustment, reason: e.target.value})}
-                                        required
-                                    >
-                                        <option value="">Select a reason</option>
-                                        <option value="purchase">Purchase Order</option>
-                                        <option value="return">Customer Return</option>
-                                        <option value="damage">Damaged Goods</option>
-                                        <option value="loss">Inventory Loss</option>
-                                        <option value="adjustment">Manual Adjustment</option>
-                                        <option value="other">Other</option>
-                                    </select>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Notes</label>
-                                    <textarea
-                                        rows="3"
-                                        value={stockAdjustment.notes}
-                                        onChange={(e) => setStockAdjustment({...stockAdjustment, notes: e.target.value})}
-                                    ></textarea>
-                                </div>
-
-                                <div className="modal-actions">
-                                    <button type="submit" className="submit-btn">Confirm Adjustment</button>
-                                    <button
-                                        type="button"
-                                        className="cancel-btn"
-                                        onClick={() => setShowStockModal(false)}
-                                    >
-                                        Cancel
-                                    </button>
-                                </div>
-                            </form>
+                            <div className="form-group">
+                                <label>New Quantity:</label>
+                                <input
+                                    type="number"
+                                    value={editQuantity}
+                                    onChange={(e) => setEditQuantity(e.target.value)}
+                                    placeholder={`Current: ${currentItem.totalQuantity}`}
+                                    min={currentItem.totalReserved} // Can't go below reserved quantity
+                                />
+                                <small className="hint">
+                                    Note: Cannot set quantity below currently reserved stock ({currentItem.totalReserved})
+                                </small>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button onClick={() => setShowEditModal(false)}>Cancel</button>
+                            <button onClick={handleUpdateInventory} className="primary">
+                                Update Inventory
+                            </button>
                         </div>
                     </div>
                 </div>

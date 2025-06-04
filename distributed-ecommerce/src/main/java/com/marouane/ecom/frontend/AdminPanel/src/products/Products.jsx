@@ -1,126 +1,187 @@
 import React, { useState, useEffect } from 'react';
 import './products.css';
+import {
+    createProduct,
+    fetchActiveProductCount,
+    fetchAllProducts,
+    fetchProductCount, hardDeleteProduct, softDeleteProduct,
+    updateProduct
+} from "../api/productApi.js";
+import {fetchLowStockProductCount} from "../api/inventoryApi.js";
 
 function Products() {
-    const [products, setProducts] = useState([
-        {
-            id: 1,
-            name: 'MacBook Pro',
-            category: 'Electronics',
-            price: 1999,
-            stock: 20,
-            status: 'Active',
-            image: 'https://via.placeholder.com/50',
-            description: 'Apple MacBook Pro with M1 chip',
-            sku: 'MBP-M1-2023',
-            createdAt: '2023-05-15'
-        },
-        {
-            id: 2,
-            name: 'Nike Air Max',
-            category: 'Shoes',
-            price: 129,
-            stock: 50,
-            status: 'Active',
-            image: 'https://via.placeholder.com/50',
-            description: 'Comfortable running shoes',
-            sku: 'NIKE-AM-270',
-            createdAt: '2023-06-20'
-        },
-        {
-            id: 3,
-            name: 'Coffee Maker',
-            category: 'Home Appliances',
-            price: 89,
-            stock: 10,
-            status: 'Inactive',
-            image: 'https://via.placeholder.com/50',
-            description: '12-cup programmable coffee maker',
-            sku: 'CM-1200-XL',
-            createdAt: '2023-04-10'
-        }
-    ]);
+    const [products, setProducts] = useState([]);
+    const [page, setPage] = useState(0);
+    const [size] = useState(5);
+    const [totalPages, setTotalPages] = useState(0);
+
+
+    const [totalCount, setTotalCount] = useState(0);
+    const [activeCount, setActiveCount] = useState(0);
+    const [lowStockCount, setLowStockCount] = useState(0);
+
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [currentProduct, setCurrentProduct] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState('All');
-    const [selectedStatus, setSelectedStatus] = useState('All');
-    const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'ascending' });
 
-    // Get unique categories for filter dropdown
-    const categories = ['All', ...new Set(products.map(product => product.category))];
 
-    const handleAddProduct = (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const newProduct = {
-            id: products.length + 1,
-            name: form.elements.name.value,
-            category: form.elements.category.value,
-            price: parseFloat(form.elements.price.value),
-            stock: parseInt(form.elements.stock.value),
-            status: form.elements.status.value,
-            image: form.elements.image.value || 'https://via.placeholder.com/50',
-            description: form.elements.description.value,
-            sku: form.elements.sku.value,
-            createdAt: new Date().toISOString().split('T')[0]
-        };
-        setProducts([...products, newProduct]);
-        setShowAddModal(false);
-    };
+    const [filters, setFilters] = useState({
+        searchTerm: '',
+        category: 'All',
+        status: null,
+        sortBy: 'createdAt',
+        sortDirection: 'desc'
+    });
 
-    const handleEditProduct = (e) => {
-        e.preventDefault();
-        const form = e.target;
-        const updatedProduct = {
-            ...currentProduct,
-            name: form.elements.name.value,
-            category: form.elements.category.value,
-            price: parseFloat(form.elements.price.value),
-            stock: parseInt(form.elements.stock.value),
-            status: form.elements.status.value,
-            image: form.elements.image.value,
-            description: form.elements.description.value,
-            sku: form.elements.sku.value
-        };
-        setProducts(products.map(product => product.id === currentProduct.id ? updatedProduct : product));
-        setShowEditModal(false);
-    };
+    const [categories, setCategories] = useState(['All']);
 
-    const handleDeleteProduct = (id) => {
-        if (window.confirm('Are you sure you want to delete this product?')) {
-            setProducts(products.filter(product => product.id !== id));
+    const refreshCounts = async () => {
+        try {
+            const [total, active, lowStock] = await Promise.all([
+                fetchProductCount(),
+                fetchActiveProductCount(),
+                fetchLowStockProductCount(5)
+            ]);
+            setTotalCount(total);
+            setActiveCount(active);
+            setLowStockCount(lowStock);
+        } catch (error) {
+            console.error("Error refreshing counts:", error);
         }
     };
+
+    const loadProducts = async () => {
+        try {
+            const productsData = await fetchAllProducts(
+                page,
+                size,
+                filters.sortBy,
+                filters.sortDirection,
+                filters.searchTerm,
+                filters.category,
+                filters.status
+            );
+
+            setProducts(productsData.content);
+            setTotalPages(productsData.totalPages);
+
+            // Extract unique categories from the response
+            const uniqueCategories = ['All', ...new Set(productsData.content.map(p => p.category))];
+            setCategories(uniqueCategories);
+
+        } catch (error) {
+            console.error("Error fetching products:", error);
+        }
+    };
+
+    useEffect(() => {
+        refreshCounts();
+    }, [])
+
+    useEffect(() => {
+        loadProducts();
+    }, [page, size, filters]);
+
+
+    const handleAddProduct = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+
+        const newProduct = {
+            productName: formData.get("name"),
+            category: formData.get("category"),
+            price: parseFloat(formData.get("price")),
+            status: formData.get("status"),
+            description: formData.get("description")
+        };
+
+        try {
+            const addedProduct = await createProduct(newProduct);
+            await loadProducts();
+            await refreshCounts();
+            setShowAddModal(false);
+        }catch (err){
+            console.error("Error adding product:", err);
+            alert("Failed to create product");
+        }
+
+
+    };
+
+    const handleEditProduct = async (e) => {
+        e.preventDefault();
+        const form = e.target;
+
+        const productRequest = {
+            productName: form.elements.name.value,
+            category: form.elements.category.value,
+            price: parseFloat(form.elements.price.value),
+            status: form.elements.status.value,
+            description: form.elements.description.value
+        };
+
+        try {
+            const updatedProduct = await updateProduct(currentProduct.id, productRequest);
+            await loadProducts();
+            await refreshCounts();
+            setShowEditModal(false);
+        } catch (err) {
+            console.error("Failed to update product:", err);
+            alert("Failed to update product");
+        }
+    };
+
 
     const handleSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
-        setSortConfig({ key, direction });
+        setFilters(prev => ({
+            ...prev,
+            sortBy: key,
+            sortDirection:
+                prev.sortBy === key && prev.sortDirection === 'asc'
+                    ? 'desc'
+                    : 'asc',
+        }));
+        setPage(0);
     };
 
-    const sortedProducts = [...products].sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-            return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-            return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-    });
+    const handleFilterChange = (filterName, value) => {
+        setFilters(prev => ({
+            ...prev,
+            [filterName]: value,
+        }));
 
-    const filteredProducts = sortedProducts.filter(product => {
-        const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.sku.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
-        const matchesStatus = selectedStatus === 'All' || product.status === selectedStatus;
-        return matchesSearch && matchesCategory && matchesStatus;
-    });
+        setPage(0);
+
+    };
+
+    const handleSoftDelete = async (id) => {
+        if (window.confirm('Are you sure you want to discontinue this product?')) {
+            try {
+                await softDeleteProduct(id);
+                // Refresh your products list
+                await loadProducts();
+                await refreshCounts();
+            } catch (error) {
+                console.error("Error soft deleting product:", error);
+                alert(error.response?.data?.message || "Failed to discontinue product");
+            }
+        }
+    };
+
+    const handleHardDelete = async (id) => {
+        if (window.confirm('WARNING: This will permanently delete the product. Are you sure?')) {
+            try {
+                await hardDeleteProduct(id);
+                // Refresh your products list
+                await loadProducts();
+                await refreshCounts();
+            } catch (error) {
+                console.error("Error hard deleting product:", error);
+                alert(error.response?.data?.message || "Failed to delete product");
+            }
+        }
+    };
 
     return (
         <div className="products-container">
@@ -130,18 +191,21 @@ function Products() {
                     <input
                         type="text"
                         placeholder="Search products..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}>
+                        value={filters.searchTerm}
+                        onChange={(e) => handleFilterChange('searchTerm', e.target.value)}                    />
+                    <select value={filters.category}
+                            onChange={(e) => handleFilterChange('category', e.target.value)}>
                         {categories.map(category => (
                             <option key={category} value={category}>{category}</option>
                         ))}
                     </select>
-                    <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+                    <select
+                        value={filters.status || 'All'}
+                        onChange={(e) => handleFilterChange('status', e.target.value === 'All' ? null : e.target.value)}>
                         <option value="All">All Statuses</option>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="INACTIVE">Inactive</option>
+                        <option value="DISCONTINUED">Discontinued</option>
                     </select>
                     <button onClick={() => setShowAddModal(true)} className="add-product-btn">
                         + Add Product
@@ -152,15 +216,15 @@ function Products() {
             <div className="products-stats">
                 <div className="stat-card">
                     <h3>Total Products</h3>
-                    <p>{products.length}</p>
+                    <p>{totalCount}</p>
                 </div>
                 <div className="stat-card">
                     <h3>Active Products</h3>
-                    <p>{products.filter(p => p.status === 'Active').length}</p>
+                    <p>{activeCount}</p>
                 </div>
                 <div className="stat-card">
                     <h3>Low Stock (&lt;5)</h3>
-                    <p>{products.filter(p => p.stock < 5).length}</p>
+                    <p>{lowStockCount}</p>
                 </div>
             </div>
 
@@ -168,23 +232,20 @@ function Products() {
                 <table className="products-table">
                     <thead>
                     <tr>
-                        <th onClick={() => handleSort('id')}>ID {sortConfig.key === 'id' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}</th>
-                        <th>Image</th>
-                        <th onClick={() => handleSort('name')}>Name {sortConfig.key === 'name' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}</th>
-                        <th onClick={() => handleSort('category')}>Category {sortConfig.key === 'category' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}</th>
-                        <th onClick={() => handleSort('price')}>Price {sortConfig.key === 'price' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}</th>
-                        <th onClick={() => handleSort('stock')}>Stock {sortConfig.key === 'stock' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}</th>
-                        <th onClick={() => handleSort('status')}>Status {sortConfig.key === 'status' && (sortConfig.direction === 'ascending' ? '↑' : '↓')}</th>
-                        <th>SKU</th>
+                        <th onClick={() => handleSort('id')}>ID {filters.sortBy === 'id' && (filters.sortDirection === 'asc' ? '↑' : '↓')}</th>
+                        <th onClick={() => handleSort('name')}>Name {filters.sortBy === 'name' && (filters.sortDirection === 'asc' ? '↑' : '↓')}</th>
+                        <th onClick={() => handleSort('category')}>Category {filters.sortBy === 'category' && (filters.sortDirection === 'asc' ? '↑' : '↓')}</th>
+                        <th onClick={() => handleSort('price')}>Price {filters.sortBy === 'price' && (filters.sortDirection === 'asc' ? '↑' : '↓')}</th>
+                        <th onClick={() => handleSort('stock')}>Stock {filters.sortBy === 'stock' && (filters.sortDirection === 'asc' ? '↑' : '↓')}</th>
+                        <th onClick={() => handleSort('status')}>Status {filters.sortBy === 'status' && (filters.sortDirection === 'asc' ? '↑' : '↓')}</th>
                         <th>Actions</th>
                     </tr>
                     </thead>
                     <tbody>
-                    {filteredProducts.length > 0 ? (
-                        filteredProducts.map((product) => (
-                            <tr key={product.id} className={product.stock < 5 ? 'low-stock' : ''}>
+                    {products.length > 0 ? (
+                        products.map((product) => (
+                            <tr key={product.id}>
                                 <td>{product.id}</td>
-                                <td><img src={product.image} alt={product.name} className="product-image" /></td>
                                 <td>
                                     <div className="product-name">{product.name}</div>
                                     <div className="product-description">{product.description}</div>
@@ -197,7 +258,6 @@ function Products() {
                                             {product.status}
                                         </span>
                                 </td>
-                                <td>{product.sku}</td>
                                 <td>
                                     <div className="action-buttons">
                                         <button
@@ -211,13 +271,17 @@ function Products() {
                                         </button>
                                         <button
                                             className="delete"
-                                            onClick={() => handleDeleteProduct(product.id)}
+                                            onClick={() => handleHardDelete(product.id)}
                                         >
                                             Delete
                                         </button>
 
-
-                                          <button className="view">View</button>
+                                        <button
+                                            className="discontinue"
+                                            onClick={() => handleSoftDelete(product.id)}
+                                        >
+                                            discontinue
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -230,6 +294,17 @@ function Products() {
                     </tbody>
                 </table>
             </div>
+            {totalPages > 1 && (
+                <div className="pagination">
+                    <button onClick={() => setPage(p => Math.max(0, p-1))} disabled={page === 0}>
+                        Previous
+                    </button>
+                    <span>Page {page + 1} of {totalPages}</span>
+                    <button onClick={() => setPage(p => p+1)} disabled={page >= totalPages - 1}>
+                        Next
+                    </button>
+                </div>
+            )}
 
             {/* Add Product Modal */}
             {showAddModal && (
@@ -243,44 +318,35 @@ function Products() {
                             <form onSubmit={handleAddProduct}>
                                 <div className="form-group">
                                     <label>Product Name</label>
-                                    <input type="text" name="name" required />
+                                    <input type="text" name="name" required/>
                                 </div>
                                 <div className="form-group">
                                     <label>Category</label>
-                                    <input type="text" name="category" required />
+                                    <input type="text" name="category" required/>
                                 </div>
                                 <div className="form-row">
                                     <div className="form-group">
                                         <label>Price</label>
-                                        <input type="number" name="price" step="0.01" required />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Stock Quantity</label>
-                                        <input type="number" name="stock" required />
+                                        <input type="number" name="price" step="0.01" required/>
                                     </div>
                                 </div>
                                 <div className="form-group">
                                     <label>Status</label>
                                     <select name="status" required>
-                                        <option value="Active">Active</option>
-                                        <option value="Inactive">Inactive</option>
+                                        <option value="ACTIVE">Active</option>
+                                        <option value="INACTIVE">Inactive</option>
+                                        <option value="DISCONTINUED">Discontinued</option>
                                     </select>
-                                </div>
-                                <div className="form-group">
-                                    <label>SKU</label>
-                                    <input type="text" name="sku" required />
                                 </div>
                                 <div className="form-group">
                                     <label>Description</label>
                                     <textarea name="description" rows="3"></textarea>
                                 </div>
-                                <div className="form-group">
-                                    <label>Image URL</label>
-                                    <input type="text" name="image" placeholder="Leave empty for default" />
-                                </div>
                                 <div className="modal-actions">
                                     <button type="submit" className="submit-btn">Add Product</button>
-                                    <button type="button" className="cancel-btn" onClick={() => setShowAddModal(false)}>Cancel</button>
+                                    <button type="button" className="cancel-btn"
+                                            onClick={() => setShowAddModal(false)}>Cancel
+                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -300,40 +366,30 @@ function Products() {
                             <form onSubmit={handleEditProduct}>
                                 <div className="form-group">
                                     <label>Product Name</label>
-                                    <input type="text" name="name" defaultValue={currentProduct.name} required />
+                                    <input type="text" name="name" defaultValue={currentProduct.name} required/>
                                 </div>
                                 <div className="form-group">
                                     <label>Category</label>
-                                    <input type="text" name="category" defaultValue={currentProduct.category} required />
+                                    <input type="text" name="category" defaultValue={currentProduct.category} required/>
                                 </div>
                                 <div className="form-row">
-                                    <div className="form-group">
+                                <div className="form-group">
                                         <label>Price</label>
                                         <input type="number" name="price" step="0.01" defaultValue={currentProduct.price} required />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Stock Quantity</label>
-                                        <input type="number" name="stock" defaultValue={currentProduct.stock} required />
                                     </div>
                                 </div>
                                 <div className="form-group">
                                     <label>Status</label>
                                     <select name="status" defaultValue={currentProduct.status} required>
-                                        <option value="Active">Active</option>
-                                        <option value="Inactive">Inactive</option>
+                                        <option value="ACTIVE">Active</option>
+                                        <option value="INACTIVE">Inactive</option>
+                                        <option value="DISCONTINUED">Discontinued</option>
                                     </select>
                                 </div>
-                                <div className="form-group">
-                                    <label>SKU</label>
-                                    <input type="text" name="sku" defaultValue={currentProduct.sku} required />
-                                </div>
+
                                 <div className="form-group">
                                     <label>Description</label>
                                     <textarea name="description" rows="3" defaultValue={currentProduct.description}></textarea>
-                                </div>
-                                <div className="form-group">
-                                    <label>Image URL</label>
-                                    <input type="text" name="image" defaultValue={currentProduct.image} />
                                 </div>
                                 <div className="modal-actions">
                                     <button type="submit" className="submit-btn">Save Changes</button>
