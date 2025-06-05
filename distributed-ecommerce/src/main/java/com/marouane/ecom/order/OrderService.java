@@ -15,7 +15,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -117,6 +119,21 @@ public class OrderService {
         order.setStatus(OrderStatus.PAID);
         return orderRepository.save(order);
 
+    }
+
+    public long countByUser(User user) {
+        return orderRepository.countByUser(user);
+    }
+
+    public List<Order> findByUser(User user) {
+        return orderRepository.findByUser(user);
+    }
+
+
+    public BigDecimal getTotalSpentByUser(User user) {
+        return orderRepository.findByUser(user).stream()
+                .map(Order::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
 
