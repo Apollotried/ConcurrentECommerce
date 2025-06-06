@@ -55,3 +55,18 @@ export const createInventory = async (productId, quantity) => {
     return response.data;
 };
 
+
+export const bulkUpdateStock = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await axiosInstance.post('/inventory/bulk-update', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data'
+        }
+    });
+    return response.data;
+};
+
+
+

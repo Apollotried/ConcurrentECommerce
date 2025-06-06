@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './inventory.css';
 import {
     fetchInventoryCounts,
-    fetchAllInventory, deleteProductInventory, updateInventoryQuantity, createInventory
+    fetchAllInventory, deleteProductInventory, updateInventoryQuantity, createInventory, bulkUpdateStock
 } from '../api/inventoryApi';
 import {getProductsWithoutInventory} from "../api/productApi.js";
 
@@ -76,6 +76,7 @@ const Inventory = () => {
     const [availableTotalPages, setAvailableTotalPages] = useState(0);
 
 
+    const [selectedFile, setSelectedFile] = useState(null);
 
 
     useEffect(() => {
@@ -192,6 +193,37 @@ const Inventory = () => {
     };
 
 
+
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            handleBulkUpload(file);
+        }
+    };
+
+    const handleBulkUploadClick = () => {
+        document.getElementById('bulk-upload-input').click();
+    };
+
+
+    const handleBulkUpload = async (file) => {
+        try {
+            const result = await bulkUpdateStock(file);
+
+            alert(`Successfully processed ${result.processedCount} records`);
+
+            loadInventories();
+        } catch (error) {
+            console.error('Bulk upload failed:', error);
+            alert(`Upload failed: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setSelectedFile(null);
+            document.getElementById('bulk-upload-input').value = '';
+        }
+    };
+
+
     return (
         <div className="inventory-container">
             <div className="inventory-header">
@@ -212,7 +244,7 @@ const Inventory = () => {
                     >
                         <option value="All">All</option>
                         <option value="low">Low Stock</option>
-                        <option value="out">Out of Stock </option>
+                        <option value="out">Out of Stock</option>
                         <option value="normal">normal Stock</option>
                     </select>
 
@@ -228,6 +260,25 @@ const Inventory = () => {
                     >
                         + Add Item
                     </button>
+
+
+                    <input
+                        type="file"
+                        id="bulk-upload-input"
+                        accept=".csv"
+                        style={{display: 'none'}}
+                        onChange={handleFileChange}
+                    />
+
+                    {/* Bulk upload button */}
+                    <button
+                        onClick={handleBulkUploadClick}
+                        className="bulk-upload-btn"
+                    >
+                        Bulk Upload
+                    </button>
+
+
                 </div>
             </div>
 

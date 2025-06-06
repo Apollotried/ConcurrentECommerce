@@ -20,6 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -293,8 +294,36 @@ public class InventoryService {
 
 
     protected void updateSingleProduct(StockUpdateRecord update){
-        Inventory inventory = inventoryRepository.findByProductIdWithLock(update.getProductId())
-                .orElseThrow(() -> new InventoryNotFoundException("Inventory not found with product id " + update.getProductId()));
+
+        if (update.getProductName() == null || update.getProductName().isBlank()) {
+            throw new IllegalArgumentException("Product name is required for record: " + update.toString());
+        }
+        if (update.getQuantity() == null) {
+            throw new IllegalArgumentException("Quantity is required");
+        }
+
+
+        Product product = productRepository.findByName(update.getProductName())
+                .orElseGet(() -> {
+                    Product newProduct = new Product();
+                    newProduct.setName(update.getProductName());
+                    newProduct.setCategory(update.getCategory());
+                    newProduct.setDescription(update.getDescription());
+                    newProduct.setStatus(update.getStatus() != null ?
+                            update.getStatus() : ProductStatus.ACTIVE);
+                    newProduct.setPrice(update.getPrice() != null ?
+                            update.getPrice() : BigDecimal.ZERO);
+                    return productRepository.save(newProduct);
+                });
+
+
+        Inventory inventory = inventoryRepository.findByProductIdWithLock(product.getId())
+                .orElseGet(() -> {
+                    Inventory newInventory = new Inventory();
+                    newInventory.setProduct(product);
+                    newInventory.setTotalQuantity(0);
+                    return inventoryRepository.save(newInventory);
+                });
 
         inventory.addStock(update.getQuantity());
         inventoryRepository.save(inventory);

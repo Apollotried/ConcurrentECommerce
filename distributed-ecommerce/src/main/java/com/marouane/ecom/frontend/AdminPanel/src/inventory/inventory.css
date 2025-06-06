@@ -577,3 +577,36 @@
 .pagination button {
     color: black;
 }
+
+
+/* Main bulk upload button */
+.bulk-upload-btn {
+    padding: 8px 16px;
+    background-color: #4a6fa5; /* Matching your blue theme */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-right: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bulk-upload-btn:hover {
+    background-color: #3a5a8f;
+    transform: translateY(-1px);
+}
+
+.bulk-upload-btn:active {
+    transform: translateY(0);
+}
+
+/* Upload icon (optional) */
+.bulk-upload-btn::before {
+    content: "📁";
+    font-size: 16px;
+}
