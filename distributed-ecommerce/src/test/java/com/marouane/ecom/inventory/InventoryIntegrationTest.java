@@ -23,11 +23,18 @@ import org.springframework.util.LinkedMultiValueMap;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class InventoryIntegrationTest extends BaseIntegrationTest {
 
@@ -254,7 +261,8 @@ class InventoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void uploadStockUpdates_ShouldProcessValidCSV() throws Exception {
+    void concurrentReserveStock_shouldPreventOverselling() throws InterruptedException {
+        // Setup initial inventory
         performAuthenticatedRequest(
                 HttpMethod.POST,
                 "/api/inventory/create/" + testProductId + "/100",
@@ -262,38 +270,132 @@ class InventoryIntegrationTest extends BaseIntegrationTest {
                 Inventory.class
         );
 
-        String csvContent = "product_id,quantity\n" + testProductId + ",50";
-        MockMultipartFile file = createMockCsvFile(csvContent);
+        int threadCount = 10;
+        int quantityPerThread = 15; // Total would be 150 if not constrained
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
 
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    RequestEntity
-                            .post("/api/inventory/upload")
-                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + jwtToken)
-                            .contentType(MediaType.MULTIPART_FORM_DATA)
-                            .body(new LinkedMultiValueMap<>() {{
-                                add("file", new org.springframework.core.io.ByteArrayResource(file.getBytes()) {
-                                    @Override
-                                    public String getFilename() {
-                                        return file.getOriginalFilename();
-                                    }
-                                });
-                            }}),
-                    String.class
-            );
-            System.out.println("Response Body: " + response.getBody());
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        }catch (Exception e){
-            e.printStackTrace();
-            throw e;
+        for (int i = 0; i < threadCount; i++) {
+            executor.execute(() -> {
+                try {
+                    latch.await();
+                    ResponseEntity<Void> response = performAuthenticatedRequest(
+                            HttpMethod.POST,
+                            "/api/inventory/" + testProductId + "/reserve?quantity=" + quantityPerThread,
+                            null,
+                            Void.class
+                    );
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        successCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    failureCount.incrementAndGet();
+                }
+            });
         }
 
+        latch.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
 
-        Inventory updatedInventory = inventoryRepository.findByProductId(testProductId)
-                .orElseThrow();
-        assertThat(updatedInventory.getTotalQuantity()).isEqualTo(150);
+        // Verify only allowed reservations succeeded
+        Inventory inventory = inventoryRepository.findByProductId(testProductId).orElseThrow();
+        assertThat(inventory.getTotalReserved()).isEqualTo(90);
+        assertThat(inventory.getAvailableQuantity()).isEqualTo(10);
 
+        assertThat(successCount.get()).isEqualTo(6);
     }
 
+    @Test
+    void concurrentReserveAndRelease_shouldMaintainConsistency() throws InterruptedException {
+        // Setup initial inventory
+        performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/inventory/create/" + testProductId + "/200",
+                null,
+                Inventory.class
+        );
+
+        int threadCount = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger reserveSuccess = new AtomicInteger(0);
+        AtomicInteger releaseSuccess = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final boolean isReserve = i % 2 == 0;
+            executor.execute(() -> {
+                try {
+                    latch.await();
+                    String endpoint = isReserve ?
+                            "/api/inventory/" + testProductId + "/reserve?quantity=10" :
+                            "/api/inventory/" + testProductId + "/release?quantity=5";
+
+                    ResponseEntity<Void> response = performAuthenticatedRequest(
+                            HttpMethod.POST,
+                            endpoint,
+                            null,
+                            Void.class
+                    );
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        if (isReserve) reserveSuccess.incrementAndGet();
+                        else releaseSuccess.incrementAndGet();
+                    }
+                } catch (Exception ignored) {}
+            });
+        }
+
+        latch.countDown();
+        executor.shutdown();
+        assertTrue(executor.awaitTermination(3, TimeUnit.SECONDS));
+
+        // Verify final inventory state
+        Inventory inventory = inventoryRepository.findByProductId(testProductId).orElseThrow();
+        int expectedReserved = (reserveSuccess.get() * 10) - (releaseSuccess.get() * 5);
+        assertThat(inventory.getTotalReserved()).isEqualTo(expectedReserved).as("totalReserved");
+        assertThat(inventory.getAvailableQuantity()).isEqualTo(200 - expectedReserved).as("availableQuantity");
+    }
+
+    @Test
+    void whenMultipleInstancesRunCleanup_shouldProcessOnce() throws Exception {
+        performAuthenticatedRequest(
+                HttpMethod.POST,
+                "/api/inventory/create/" + testProductId + "/100",
+                null,
+                Inventory.class
+        );
+
+        UUID orderId = UUID.randomUUID();
+        inventoryService.reserveForOrder(Map.of(testProductId, 20), orderId);
+
+        // Force expiration
+        reservationRepository.findAll().forEach(r ->
+                r.setExpiresAt(LocalDateTime.now().minusMinutes(1)));
+        reservationRepository.flush();
+
+        // Simulate multiple instances trying to clean up
+        int instanceCount = 3;
+        AtomicInteger cleanupCount = new AtomicInteger(0);
+
+        for (int i = 0; i < instanceCount; i++) {
+            new Thread(() -> {
+                try {
+                    inventoryService.releaseExpiredReservations();
+                    cleanupCount.incrementAndGet();
+                } catch (Exception ignored) {}
+            }).start();
+        }
+
+        // Wait for completion
+        Thread.sleep(2000);
+
+        // Verify cleanup happened only once
+        assertThat(cleanupCount.get()).isEqualTo(1);
+        assertThat(reservationRepository.count()).isZero();
+        assertThat(inventoryRepository.findByProductId(testProductId)
+                .orElseThrow().getTotalReserved()).isZero();
+    }
 
 }

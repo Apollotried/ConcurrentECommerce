@@ -11,12 +11,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.*;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProductIntegrationTest extends BaseIntegrationTest {
 
@@ -85,7 +94,11 @@ class ProductIntegrationTest extends BaseIntegrationTest {
 
     }
 
-
+    @Test
+    void testJwt(){
+        assertThat(jwtToken).isNotEmpty();
+        assertThat(jwtToken).isNotBlank();
+    }
     @Test
     void productLifecycle(){
         ProductRequest request = ProductRequest.builder()
@@ -149,13 +162,13 @@ class ProductIntegrationTest extends BaseIntegrationTest {
         // Soft Delete
         ResponseEntity<Void> deleteResponse = performAuthenticatedRequest(
                 HttpMethod.DELETE,
-                "/api/products/" + createdProduct.getId(),
+                "/api/products/" + createdProduct.getId() + "/soft",
                 null,
                 Void.class
         );
         assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
-        // Verify Soft deletion
+        //validate Soft deletion
         ResponseEntity<ProductResponse> deletedGetResponse = performAuthenticatedRequest(
                 HttpMethod.GET,
                 "/api/products/" + createdProduct.getId(),
@@ -166,12 +179,70 @@ class ProductIntegrationTest extends BaseIntegrationTest {
         assertThat(deletedGetResponse.getBody().getStatus())
                 .isEqualTo(ProductStatus.DISCONTINUED);
 
-
-
     }
 
 
+    @Test
+    void concurrentHardDeleteShouldPreventRaceConditions() throws InterruptedException {
+        // Create test product
+        Product product = productRepository.save(Product.builder()
+                .name("Test Product")
+                .status(ProductStatus.ACTIVE)
+                .build());
 
+        int threadCount = 5;
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger notFoundCount = new AtomicInteger(0); // For 404s
+        AtomicInteger conflictCount = new AtomicInteger(0); // For 409s
+        AtomicInteger otherErrorCount = new AtomicInteger(0);
+
+        // Simulate concurrent hard deletion attempts
+        for (int i = 0; i < threadCount; i++) {
+            executorService.execute(() -> {
+                try {
+                    latch.await();
+                    ResponseEntity<Void> response = performAuthenticatedRequest(
+                            HttpMethod.DELETE,
+                            "/api/products/" + product.getId() + "/hard",
+                            null,
+                            Void.class
+                    );
+
+                    // More precise status code checking
+                    if (response.getStatusCode() == HttpStatus.NO_CONTENT) {
+                        successCount.incrementAndGet();
+                    } else if (response.getStatusCode() == HttpStatus.NOT_FOUND) {
+                        notFoundCount.incrementAndGet();
+                    } else if (response.getStatusCode() == HttpStatus.CONFLICT) {
+                        conflictCount.incrementAndGet();
+                    }
+                } catch (HttpClientErrorException e) {
+                    if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+                        notFoundCount.incrementAndGet();
+                    } else if (e.getStatusCode() == HttpStatus.CONFLICT) {
+                        conflictCount.incrementAndGet();
+                    } else {
+                        otherErrorCount.incrementAndGet();
+                    }
+                } catch (Exception e) {
+                    otherErrorCount.incrementAndGet();
+                }
+            });
+        }
+
+        // Trigger all threads at once
+        latch.countDown();
+        executorService.shutdown();
+        assertTrue(executorService.awaitTermination(3, TimeUnit.SECONDS));
+
+        // Verify results
+        assertThat(successCount.get()).isEqualTo(1);
+
+        // Verify product is deleted
+        assertThat(productRepository.findById(product.getId())).isEmpty();
+    }
 
 
 

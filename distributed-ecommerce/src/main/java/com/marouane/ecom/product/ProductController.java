@@ -1,8 +1,11 @@
 package com.marouane.ecom.product;
 
 import com.marouane.ecom.common.PageResponse;
+import com.marouane.ecom.exception.ProductDeletionException;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,8 +33,16 @@ public class ProductController {
 
     @DeleteMapping("/{id}/soft")
     public ResponseEntity<Void> softDeleteProduct(@PathVariable Long id) {
-        productService.softDeleteProduct(id);
-        return ResponseEntity.noContent().build();
+        try {
+            productService.softDeleteProduct(id);
+            return ResponseEntity.noContent().build();
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.notFound().build();
+        } catch (PessimisticLockingFailureException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        } catch (ProductDeletionException e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
 
     @DeleteMapping("/{id}/hard")

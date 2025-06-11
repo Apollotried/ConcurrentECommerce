@@ -7,6 +7,7 @@ import com.marouane.ecom.exception.ProductNotFoundException;
 import com.marouane.ecom.inventory.InventoryService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.data.domain.Pageable;import java.util.ArrayList;
+import java.util.ConcurrentModificationException;
 import java.util.List;
 
 @Service
@@ -54,33 +56,44 @@ public class ProductService {
 
     @Transactional
     public void softDeleteProduct(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+        try {
+            Product product = productRepository.findByIdWithLock(productId)
+                    .orElseThrow(() -> new EntityNotFoundException("Product not found"));
 
-        if (inventoryService.hasActiveReservations(productId)){
-            throw new ProductDeletionException(
-                    "Cannot discontinue product with active reservations");
+            if (inventoryService.hasActiveReservations(productId)) {
+                throw new ProductDeletionException(
+                        "Cannot discontinue product with active reservations");
+            }
+
+            product.setStatus(ProductStatus.DISCONTINUED);
+            productRepository.save(product);
+        } catch (PessimisticLockingFailureException e) {
+            throw new ConcurrentModificationException(
+                    "Product is currently being modified by another transaction. Please try again.");
         }
-
-        product.setStatus(ProductStatus.DISCONTINUED);
-        productRepository.save(product);
     }
+
+
 
     @Transactional
     public void hardDeleteProduct(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found"));
+        try {
+            Product product = productRepository.findByIdWithLock(productId)
+                    .orElseThrow(() -> new EntityNotFoundException("Product not found"));
 
-        if (inventoryService.hasActiveReservations(productId)) {
-            throw new ProductDeletionException(
-                    "Cannot delete product with active reservations");
+            if (inventoryService.hasActiveReservations(productId)) {
+                throw new ProductDeletionException(
+                        "Cannot delete product with active reservations");
+            }
+
+            inventoryService.deleteByProductId(productId);
+            productRepository.delete(product);
+        } catch (PessimisticLockingFailureException e) {
+            throw new ConcurrentModificationException(
+                    "Product is currently being modified by another transaction. Please try again.");
         }
-
-        inventoryService.deleteByProductId(productId);
-
-
-        productRepository.delete(product);
     }
+
 
 
     public PageResponse<ProductResponse> getAllProducts(
