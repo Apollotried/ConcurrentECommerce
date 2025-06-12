@@ -7,11 +7,13 @@ import ProductPage from "./ProductPage.jsx";
 import CategoryPage from "./CategoryPage.jsx";
 import CustomerPage from "./CustomerPage.jsx";
 import InventoryPage from "./InventoryPage.jsx";
+import {ToastNotificationContainer} from "./utils/toast.jsx";
 function App() {
 
 
   return (
       <AuthProvider>
+          <ToastNotificationContainer  />
           <Router>
               <Routes>
                   <Route path="/" element={<LoginPage />} />

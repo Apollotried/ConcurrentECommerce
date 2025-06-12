@@ -5,6 +5,7 @@ import {
     fetchAllInventory, deleteProductInventory, updateInventoryQuantity, createInventory, bulkUpdateStock
 } from '../api/inventoryApi';
 import {getProductsWithoutInventory} from "../api/productApi.js";
+import {showErrorToast, showSuccessToast} from "../utils/toast.jsx";
 
 
 const Inventory = () => {
@@ -67,6 +68,7 @@ const Inventory = () => {
 
         } catch (error) {
             console.error("Error fetching products:", error);
+            showErrorToast("Failed to load inventory");
         }
     };
 
@@ -147,9 +149,10 @@ const Inventory = () => {
 
             const countsData = await fetchInventoryCounts();
             setCounts(countsData);
+            showSuccessToast("Inventory item added successfully");
         } catch (error) {
             console.error('Error adding inventory:', error);
-            alert('Failed to add inventory: ' + error.message);
+            showErrorToast(error.response?.data?.message || "Failed to add inventory");
         }
     };
 
@@ -162,9 +165,10 @@ const Inventory = () => {
             const countsData = await fetchInventoryCounts();
             setCounts(countsData);
             setShowEditModal(false);
+            showSuccessToast("Inventory updated successfully");
         } catch (error) {
             console.error('Error updating inventory:', error);
-            alert('Failed to update inventory: ' + error.message);
+            showErrorToast(error.response?.data?.message || "Failed to update inventory");
         }
     };
 
@@ -177,9 +181,10 @@ const Inventory = () => {
 
                 const countsData = await fetchInventoryCounts();
                 setCounts(countsData);
+                showSuccessToast("Inventory item deleted successfully");
             } catch (error) {
                 console.error('Error deleting inventory:', error);
-                alert('Failed to delete inventory: ' + error.message);
+                showErrorToast(error.response?.data?.message || "Failed to delete inventory");
             }
         }
     };
@@ -211,12 +216,11 @@ const Inventory = () => {
         try {
             const result = await bulkUpdateStock(file);
 
-            alert(`Successfully processed ${result.processedCount} records`);
-
+            showSuccessToast(`Successfully processed ${result.processedCount} records`);
             loadInventories();
         } catch (error) {
             console.error('Bulk upload failed:', error);
-            alert(`Upload failed: ${error.response?.data?.message || error.message}`);
+            showErrorToast(`Upload failed: ${error.response?.data?.message || error.message}`);
         } finally {
             setSelectedFile(null);
             document.getElementById('bulk-upload-input').value = '';

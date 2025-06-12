@@ -7,6 +7,7 @@ import {
     updateCustomer,
     createCustomer
 } from '../api/customerApi';
+import {showErrorToast, showSuccessToast} from "../utils/toast.jsx";
 
 const Customers = () => {
     // State management
@@ -61,6 +62,7 @@ const Customers = () => {
             setTotalPages(customerData.totalPages);
         } catch (error) {
             console.error("Error fetching customers:", error);
+            showErrorToast("Failed to load customers");
         }
     }, [currentPage, size, filters]);
 
@@ -125,9 +127,11 @@ const Customers = () => {
                 email: '',
                 phone: '',
             });
+
+            showSuccessToast("Customer added successfully");
         } catch (error) {
             console.error('Error adding customer:', error);
-            alert('Failed to add customer: ' + error.message);
+            showErrorToast(error.response?.data?.message || "Failed to add customer");
         }
     };
 
@@ -147,9 +151,10 @@ const Customers = () => {
 
 
             setShowEditModal(false);
+            showSuccessToast("Customer updated successfully");
         } catch (error) {
             console.error('Error updating customer:', error);
-            alert('Failed to update customer: ' + error.message);
+            showErrorToast(error.response?.data?.message || "Failed to update customer");
         }
     };
 
@@ -171,9 +176,10 @@ const Customers = () => {
 
 
                 await loadCustomers();
+                showSuccessToast("Customer deleted successfully");
             } catch (error) {
                 console.error('Error deleting customer:', error);
-                alert('Failed to delete customer: ' + error.message);
+                showErrorToast(error.response?.data?.message || "Failed to delete customer");
             }
         }
     };

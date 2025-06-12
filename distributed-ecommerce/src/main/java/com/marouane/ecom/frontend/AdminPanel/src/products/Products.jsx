@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './products.css';
+
+
 import {
     createProduct,
     fetchActiveProductCount,
@@ -8,6 +10,7 @@ import {
     updateProduct
 } from "../api/productApi.js";
 import {fetchLowStockProductCount} from "../api/inventoryApi.js";
+import {showErrorToast, showSuccessToast} from "../utils/toast.jsx";
 
 function Products() {
     const [products, setProducts] = useState([]);
@@ -48,6 +51,7 @@ function Products() {
             setLowStockCount(lowStock);
         } catch (error) {
             console.error("Error refreshing counts:", error);
+            showErrorToast("Failed to load product statistics");
         }
     };
 
@@ -72,6 +76,7 @@ function Products() {
 
         } catch (error) {
             console.error("Error fetching products:", error);
+            showErrorToast("Failed to load products");
         }
     };
 
@@ -101,9 +106,10 @@ function Products() {
             await loadProducts();
             await refreshCounts();
             setShowAddModal(false);
+            showSuccessToast("Product created successfully!");
         }catch (err){
             console.error("Error adding product:", err);
-            alert("Failed to create product");
+            showErrorToast(err.response?.data?.message || "Failed to create product");
         }
 
 
@@ -126,9 +132,10 @@ function Products() {
             await loadProducts();
             await refreshCounts();
             setShowEditModal(false);
+            showSuccessToast("Product updated successfully!");
         } catch (err) {
             console.error("Failed to update product:", err);
-            alert("Failed to update product");
+            showErrorToast(err.response?.data?.message || "Failed to update product");
         }
     };
 
@@ -162,9 +169,10 @@ function Products() {
                 // Refresh your products list
                 await loadProducts();
                 await refreshCounts();
+                showSuccessToast("Product discontinued successfully");
             } catch (error) {
                 console.error("Error soft deleting product:", error);
-                alert(error.response?.data?.message || "Failed to discontinue product");
+                showErrorToast(error.response?.data?.message || "Failed to discontinue product");
             }
         }
     };
@@ -176,9 +184,10 @@ function Products() {
                 // Refresh your products list
                 await loadProducts();
                 await refreshCounts();
+                showSuccessToast("Product deleted permanently");
             } catch (error) {
                 console.error("Error hard deleting product:", error);
-                alert(error.response?.data?.message || "Failed to delete product");
+                showErrorToast(error.response?.data?.message || "Failed to delete product");
             }
         }
     };
