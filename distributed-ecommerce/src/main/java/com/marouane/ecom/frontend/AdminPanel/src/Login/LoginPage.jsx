@@ -26,12 +26,15 @@ const LoginPage = () => {
                 const decodedToken = jwtDecode(response.token);
                 const username = decodedToken.sub;
                 const role = decodedToken.authorities;
+                console.log(role);
                 setUserProfile({username, role});
-                setIsAuthenticated(false);
+                setIsAuthenticated(true);
 
                 toast.success('Login successful!');
                 if (role.includes("ADMIN")){
-                    navigate('/admin');
+                    setTimeout(() => {
+                        navigate('/admin');
+                    }, 100);
                 }else {
                     console.log(role);
                     toast.info('this is not an admin account');
