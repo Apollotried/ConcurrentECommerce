@@ -35,7 +35,6 @@ public class OrderService {
     @Transactional
     public Order createOrderFromCart(Authentication connectedUser){
         User user = (User) connectedUser.getPrincipal();
-
         Cart cart = cartRepository.findByUser_Id(user.getId())
                 .orElseThrow(() -> new CartNotFoundException("Cart not found"));
 
@@ -125,8 +124,13 @@ public class OrderService {
         return orderRepository.countByUser(user);
     }
 
-    public List<Order> findByUser(User user) {
-        return orderRepository.findByUser(user);
+
+
+    public List<OrderDto> findOrdersByUser(User user) {
+        List<Order> orders = orderRepository.findByUser(user);
+        return orders.stream()
+                .map(OrderDto::fromEntity)
+                .toList();
     }
 
 

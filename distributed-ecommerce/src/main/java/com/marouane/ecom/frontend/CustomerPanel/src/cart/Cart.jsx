@@ -20,8 +20,12 @@ import { Delete, Add, Remove } from '@mui/icons-material';
 import React, { useState, useEffect } from 'react';
 import Navbar from "../navbar/NavBar.jsx";
 import { fetchAllCartItems } from '../api/cartApi.jsx';
+import {useNavigate} from "react-router-dom";
 
 const Cart = () => {
+    const navigate = useNavigate();
+
+
     const [cartData, setCartData] = useState({
         content: [],
         number: 0,
@@ -33,6 +37,7 @@ const Cart = () => {
     });
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
 
     useEffect(() => {
         const loadCartItems = async () => {
@@ -102,15 +107,30 @@ const Cart = () => {
     };
 
     const handleCheckout = () => {
-        setSnackbar({
-            open: true,
-            message: 'Checkout simulated successfully!',
-            severity: 'success',
-        });
+        if (cartData.content.length === 0) {
+            setSnackbar({
+                open: true,
+                message: 'Your cart is empty',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        // Prepare cart data for checkout
+        const checkoutData = {
+            items: cartData.content,
+            total: cartData.content.reduce(
+                (sum, item) => sum + (item.productPrice * item.quantity),
+                0
+            )
+        };
+
+        // Navigate to checkout page with cart data
+        navigate('/checkout', { state: { checkoutData } });
     };
 
     const total = cartData.content.reduce(
-        (sum, item) => sum + item.productPrice * item.quantity,
+        (sum, item) => sum + (item.productPrice * item.quantity),
         0
     );
 
