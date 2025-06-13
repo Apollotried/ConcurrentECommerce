@@ -1,5 +1,6 @@
 package com.marouane.ecom.cart;
 
+import com.marouane.ecom.common.PageResponse;
 import com.marouane.ecom.exception.CartItemNotFoundException;
 import com.marouane.ecom.exception.EmptyCartException;
 import com.marouane.ecom.exception.InsufficientStockException;
@@ -13,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -22,6 +24,7 @@ public class CartService {
     private final CartRepository cartRepository;
     private final ProductRepository productRepository;
     private final InventoryService inventoryService;
+    private final CartMapper cartMapper;
 
 
     public Cart CreateOrGetCart(Authentication connectedUser) {
@@ -35,6 +38,8 @@ public class CartService {
         Cart cart = Cart.builder().user(user).build();
         return cartRepository.save(cart);
     }
+
+
 
 
     @Transactional
@@ -98,5 +103,38 @@ public class CartService {
             );
         }
 
+    }
+
+
+    public PageResponse<CartItemDto> getCartItems(Authentication connectedUser, int page, int size) {
+        Cart cart = CreateOrGetCart(connectedUser);
+
+        List<CartItemDto> allItems = cart.getItems().stream()
+                .map(cartMapper::mapToCartItemDto)
+                .toList();
+
+        int totalItems = allItems.size();
+        int totalPages = (int) Math.ceil((double) totalItems / size);
+
+
+        if (page < 0 || (page >= totalPages && totalPages > 0)) {
+            throw new IllegalArgumentException("Invalid page number");
+        }
+
+
+        int fromIndex = page * size;
+        int toIndex = Math.min(fromIndex + size, totalItems);
+
+        List<CartItemDto> paginatedItems = allItems.subList(fromIndex, toIndex);
+
+        return PageResponse.<CartItemDto>builder()
+                .content(paginatedItems)
+                .number(page)
+                .size(size)
+                .totalElements(totalItems)
+                .totalPages(totalPages)
+                .first(page == 0)
+                .last(page == totalPages - 1 || totalPages == 0)
+                .build();
     }
 }

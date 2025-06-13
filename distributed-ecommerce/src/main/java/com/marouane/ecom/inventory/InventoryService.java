@@ -422,10 +422,10 @@ public class InventoryService {
     }
 
 
-
-
-
-
-
+    public boolean isInStock(Long productId) {
+        return inventoryRepository.findByProductId(productId)
+                .map(inventory -> inventory.getTotalQuantity() > 0)
+                .orElse(false);
+    }
 
 }

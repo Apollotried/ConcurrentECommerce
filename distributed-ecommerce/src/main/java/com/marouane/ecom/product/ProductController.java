@@ -66,6 +66,20 @@ public class ProductController {
     }
 
 
+    @GetMapping("/available")
+    public ResponseEntity<PageResponse<ProductResponse>> getAvailableProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false) String sortDir,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) ProductStatus status) {
+        PageResponse<ProductResponse> productPageResponse = productService.getAvailableProducts(page, size, sortBy, sortDir, search, category);
+        return ResponseEntity.ok(productPageResponse);
+    }
+
+
     @GetMapping("/{id}")
     public ResponseEntity<ProductResponse> getProductById(@PathVariable Long id) {
         ProductResponse productResponse = productService.getProductById(id);

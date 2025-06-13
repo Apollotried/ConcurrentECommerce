@@ -1,5 +1,6 @@
 package com.marouane.ecom.cart;
 
+import com.marouane.ecom.common.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -19,6 +20,16 @@ public class CartController {
     public ResponseEntity<Cart> createOrGetCart(Authentication authentication) {
         Cart cart = cartService.CreateOrGetCart(authentication);
         return ResponseEntity.ok(cart);
+    }
+
+
+    @GetMapping("/items")
+    public ResponseEntity<PageResponse<CartItemDto>> getCartItems(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        PageResponse<CartItemDto> response = cartService.getCartItems(authentication, page, size);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/add/{productId}/{quantity}")

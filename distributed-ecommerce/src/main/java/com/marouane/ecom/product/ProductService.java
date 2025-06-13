@@ -38,6 +38,8 @@ public class ProductService {
                         .build()
         );
 
+
+
     }
 
     @Transactional
@@ -191,6 +193,68 @@ public class ProductService {
                 productPage.getTotalPages(),
                 productPage.isFirst(),
                 productPage.isLast()
+        );
+    }
+
+
+    public PageResponse<ProductResponse> getAvailableProducts(
+            int page,
+            int size,
+            String sortBy,
+            String sortDir,
+            String search,
+            String category) {
+
+        // Create Sort object
+        Sort sort = Sort.by("createdAt").descending(); // default
+        if (sortBy != null && sortDir != null) {
+            sort = Sort.by(Sort.Direction.fromString(sortDir), sortBy);
+        }
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // Build specification for filtering
+        Specification<Product> spec = Specification.where(
+                (root, query, cb) -> cb.equal(root.get("status"), ProductStatus.ACTIVE)
+        );
+
+        if (search != null && !search.isEmpty()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.or(
+                            cb.like(cb.lower(root.get("name")), "%" + search.toLowerCase() + "%"),
+                            cb.like(cb.lower(root.get("description")), "%" + search.toLowerCase() + "%")
+                    )
+            );
+        }
+
+        if (category != null && !category.equals("All")) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("category"), category)
+            );
+        }
+
+        // First get all active products that match filters
+        Page<Product> activeProducts = productRepository.findAll(spec, pageable);
+
+        // Then filter out products with no inventory
+        List<Product> availableProducts = activeProducts.getContent().stream()
+                .filter(product -> inventoryService.isInStock(product.getId()))
+                .toList();
+
+        // Convert to response DTOs
+        List<ProductResponse> responses = availableProducts.stream()
+                .map(productMapper::toProductResponse)
+                .toList();
+
+        // Create custom page response since we did post-filtering
+        return new PageResponse<>(
+                responses,
+                activeProducts.getNumber(),
+                activeProducts.getSize(),
+                availableProducts.size(),
+                (int) Math.ceil((double) availableProducts.size() / size),
+                activeProducts.isFirst(),
+                activeProducts.getNumber() >= (int) Math.ceil((double) availableProducts.size() / size) - 1
         );
     }
 
