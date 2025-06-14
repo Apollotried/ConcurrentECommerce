@@ -8,8 +8,8 @@ import java.util.UUID;
 @Service
 public class PaymentService {
 
-    public PaymentResult process(BigDecimal amount, String cardToken){
-        boolean isSuccess = isCardValid(cardToken);
+    public PaymentResult process(BigDecimal amount, String cardNumber){
+        boolean isSuccess = isCardValid(cardNumber);
 
         return new PaymentResult(
                 isSuccess,
@@ -18,8 +18,12 @@ public class PaymentService {
         );
     }
 
-    public boolean isCardValid(String cardToken){
-        char lastChar = cardToken.charAt(cardToken.length()-1);
+    public boolean isCardValid(String cardNumber){
+        if (cardNumber == null || cardNumber.isEmpty()) {
+            return false;
+        }
+
+        char lastChar = cardNumber.charAt(cardNumber.length()-1);
         return Character.isDigit(lastChar) && (lastChar % 2 == 0);
     }
 }

@@ -42,7 +42,7 @@ public class OrderController {
             @RequestBody CheckoutRequest request,
             Authentication authentication
     ) {
-        Order order = orderService.completeOrder(authentication, request.getPaymentToken());
+        Order order = orderService.completeOrder(authentication, request.getCardNumber());
         return ResponseEntity.ok(order);
     }
 

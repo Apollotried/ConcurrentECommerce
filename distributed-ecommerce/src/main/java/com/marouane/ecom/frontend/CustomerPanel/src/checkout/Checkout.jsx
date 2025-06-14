@@ -52,20 +52,16 @@ const Checkout = () => {
     };
 
     const handlePlaceOrder = async () => {
-        if (!orderData.shipping || !orderData.payment?.token) {
-            setError('Missing shipping information or payment token');
+        if (!orderData.shipping || !orderData.payment?.cardNumber) {
+            setError('Missing shipping information or payment details');
             return;
         }
 
         try {
             const response = await completeOrderWithShipping({
-                paymentToken: orderData.payment.token,
+                cardNumber: orderData.payment.cardNumber,  // Send raw card number
                 shippingAddress: orderData.shipping
             });
-
-            if (response.success === false) {
-                throw new Error(response.message || 'Payment failed');
-            }
 
             navigate('/order-confirmation', {
                 state: {
@@ -74,7 +70,6 @@ const Checkout = () => {
                 }
             });
         } catch (err) {
-            console.error('Checkout failed:', err);
             setError(err.message || 'Checkout failed. Please try again.');
         }
     };

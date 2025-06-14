@@ -37,15 +37,25 @@ const PaymentStep = ({ onBack, onSubmit }) => {
         e.preventDefault();
         setError(null);
 
-        if (!validateCard(cardData.number)) {
-            setError('Payment failed: Card declined (mock service requires last digit to be even)');
+        const cleanedNumber = cardData.number.replace(/\D/g, '');
+
+
+        if (cleanedNumber.length < 13 || cleanedNumber.length > 16) {
+            setError('Please enter a valid 13-16 digit card number');
             return;
         }
 
+        const lastDigit = parseInt(cleanedNumber.slice(-1));
+        if (lastDigit % 2 !== 0) {
+            setError('Mock payment requires last digit to be even');
+            return;
+        }
+
+        // Send raw card number instead of mock token
         const paymentData = {
             method: 'creditCard',
-            token: `mock_card_token_${cardData.number.slice(-4)}_${Math.random().toString(36).substr(2, 8)}`,
-            last4: cardData.number.slice(-4)
+            cardNumber: cleanedNumber,
+            last4: cleanedNumber.slice(-4)
         };
 
         onSubmit(paymentData);

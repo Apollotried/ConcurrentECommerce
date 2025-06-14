@@ -6,7 +6,7 @@ import lombok.Data;
 @Data
 public class CheckoutRequest {
     @NotBlank
-    private String paymentToken;
+    private String cardNumber;
 
     private ShippingAddress shippingAddress;
 }

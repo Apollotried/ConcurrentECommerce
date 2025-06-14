@@ -57,10 +57,8 @@ export const completeOrderWithShipping = async (data) => {
     try {
         const response = await axiosInstance.post('/orders/checkout', data);
 
-        // If the backend returns success=false in the response
         if (response.data && response.data.success === false) {
-            // Convert to rejected promise to trigger catch block
-            return Promise.reject(new Error(response.data.message));
+            throw new Error(response.data.message);
         }
 
         return response.data;

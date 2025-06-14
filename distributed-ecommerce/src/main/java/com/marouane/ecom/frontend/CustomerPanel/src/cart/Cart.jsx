@@ -19,13 +19,16 @@ import {
 import { Delete, Add, Remove } from '@mui/icons-material';
 import React, { useState, useEffect } from 'react';
 import Navbar from "../navbar/NavBar.jsx";
-import { fetchAllCartItems } from '../api/cartApi.jsx';
-import {useNavigate} from "react-router-dom";
+import {
+    fetchAllCartItems,
+    updateCartItemQuantity,
+    removeCartItem,
+    validateCart
+} from '../api/cartApi.jsx';
+import { useNavigate } from "react-router-dom";
 
 const Cart = () => {
     const navigate = useNavigate();
-
-
     const [cartData, setCartData] = useState({
         content: [],
         number: 0,
@@ -37,7 +40,7 @@ const Cart = () => {
     });
     const [loading, setLoading] = useState(true);
     const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
+    const [updatingItems, setUpdatingItems] = useState({}); // Track items being updated
 
     useEffect(() => {
         const loadCartItems = async () => {
@@ -46,11 +49,7 @@ const Cart = () => {
                 const data = await fetchAllCartItems(cartData.number, cartData.size);
                 setCartData(data);
             } catch (error) {
-                setSnackbar({
-                    open: true,
-                    message: 'Failed to load cart items',
-                    severity: 'error',
-                });
+                showSnackbar('Failed to load cart items', 'error');
             } finally {
                 setLoading(false);
             }
@@ -58,16 +57,24 @@ const Cart = () => {
         loadCartItems();
     }, [cartData.number]);
 
+    const showSnackbar = (message, severity) => {
+        setSnackbar({ open: true, message, severity });
+    };
+
     const handlePageChange = (event, newPage) => {
-        // Axios uses 0-based pages, Pagination uses 1-based
         setCartData(prev => ({ ...prev, number: newPage - 1 }));
     };
 
     const handleUpdateQuantity = async (itemId, newQuantity) => {
         if (newQuantity < 1) return;
+
         try {
-            // TODO: Call your update quantity API endpoint here
-            // await updateCartItemQuantity(itemId, newQuantity);
+            setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+
+            // Update on server
+            await updateCartItemQuantity(itemId, newQuantity);
+
+            // Update local state
             setCartData(prev => ({
                 ...prev,
                 content: prev.content.map(item =>
@@ -75,58 +82,62 @@ const Cart = () => {
                 )
             }));
         } catch (error) {
-            setSnackbar({
-                open: true,
-                message: 'Failed to update quantity',
-                severity: 'error',
-            });
+            showSnackbar('Failed to update quantity', 'error');
+            // Revert to previous quantity
+            setCartData(prev => ({ ...prev }));
+        } finally {
+            setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
         }
     };
 
     const handleRemoveItem = async (itemId) => {
         try {
-            // TODO: Call your remove item API endpoint here
-            // await removeCartItem(itemId);
+            setUpdatingItems(prev => ({ ...prev, [itemId]: true }));
+
+            // Remove from server
+            await removeCartItem(itemId);
+
+            // Update local state
             setCartData(prev => ({
                 ...prev,
                 content: prev.content.filter(item => item.id !== itemId),
                 totalElements: prev.totalElements - 1
             }));
-            setSnackbar({
-                open: true,
-                message: 'Item removed from cart',
-                severity: 'success',
-            });
+
+            showSnackbar('Item removed from cart', 'success');
         } catch (error) {
-            setSnackbar({
-                open: true,
-                message: 'Failed to remove item',
-                severity: 'error',
-            });
+            showSnackbar('Failed to remove item', 'error');
+        } finally {
+            setUpdatingItems(prev => ({ ...prev, [itemId]: false }));
         }
     };
 
-    const handleCheckout = () => {
+    const handleCheckout = async () => {
         if (cartData.content.length === 0) {
-            setSnackbar({
-                open: true,
-                message: 'Your cart is empty',
-                severity: 'warning'
-            });
+            showSnackbar('Your cart is empty', 'warning');
             return;
         }
 
-        // Prepare cart data for checkout
-        const checkoutData = {
-            items: cartData.content,
-            total: cartData.content.reduce(
-                (sum, item) => sum + (item.productPrice * item.quantity),
-                0
-            )
-        };
+        try {
+            // Validate cart before checkout
+            await validateCart();
 
-        // Navigate to checkout page with cart data
-        navigate('/checkout', { state: { checkoutData } });
+            // Prepare cart data for checkout
+            const checkoutData = {
+                items: cartData.content,
+                total: cartData.content.reduce(
+                    (sum, item) => sum + (item.productPrice * item.quantity),
+                    0
+                )
+            };
+
+            navigate('/checkout', { state: { checkoutData } });
+        } catch (error) {
+            showSnackbar(
+                error.message || 'Cannot proceed to checkout. Please review your cart.',
+                'error'
+            );
+        }
     };
 
     const total = cartData.content.reduce(
@@ -163,9 +174,13 @@ const Cart = () => {
                                                 <IconButton
                                                     edge="end"
                                                     onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                                                    disabled={item.quantity <= 1}
+                                                    disabled={item.quantity <= 1 || updatingItems[item.id]}
                                                 >
-                                                    <Remove />
+                                                    {updatingItems[item.id] ? (
+                                                        <CircularProgress size={24} />
+                                                    ) : (
+                                                        <Remove />
+                                                    )}
                                                 </IconButton>
                                                 <TextField
                                                     value={item.quantity}
@@ -174,21 +189,55 @@ const Cart = () => {
                                                         handleUpdateQuantity(item.id, value);
                                                     }}
                                                     type="number"
-                                                    inputProps={{ min: 1, style: { width: 48, textAlign: 'center' } }}
-                                                    sx={{ width: 60, mx: 0.5 }}
+                                                    inputProps={{
+                                                        min: 1,
+                                                        style: {
+                                                            width: 48,
+                                                            textAlign: 'center',
+                                                            // Remove arrows for Chrome, Safari, Edge, Opera
+                                                            MozAppearance: 'textfield',
+                                                            appearance: 'textfield'
+                                                        },
+                                                        // Remove arrows for Firefox
+                                                        'aria-hidden': true
+                                                    }}
+                                                    sx={{
+                                                        width: 60,
+                                                        mx: 0.5,
+                                                        // Hide the default number input spinner
+                                                        '& input[type=number]': {
+                                                            '-moz-appearance': 'textfield',
+                                                            '-webkit-appearance': 'textfield',
+                                                            appearance: 'textfield',
+                                                        },
+                                                        '& input[type=number]::-webkit-outer-spin-button, & input[type=number]::-webkit-inner-spin-button': {
+                                                            '-webkit-appearance': 'none',
+                                                            margin: 0,
+                                                        }
+                                                    }}
                                                 />
                                                 <IconButton
                                                     edge="end"
                                                     onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                                                    disabled={updatingItems[item.id]}
                                                 >
-                                                    <Add />
+                                                    {updatingItems[item.id] ? (
+                                                        <CircularProgress size={24} />
+                                                    ) : (
+                                                        <Add />
+                                                    )}
                                                 </IconButton>
                                                 <IconButton
                                                     edge="end"
                                                     onClick={() => handleRemoveItem(item.id)}
                                                     sx={{ ml: 1 }}
+                                                    disabled={updatingItems[item.id]}
                                                 >
-                                                    <Delete />
+                                                    {updatingItems[item.id] ? (
+                                                        <CircularProgress size={24} />
+                                                    ) : (
+                                                        <Delete />
+                                                    )}
                                                 </IconButton>
                                             </ListItemSecondaryAction>
                                         </ListItem>
@@ -201,14 +250,19 @@ const Cart = () => {
                                 <Box display="flex" justifyContent="center" my={2}>
                                     <Pagination
                                         count={cartData.totalPages}
-                                        page={cartData.number + 1} // Convert to 1-based
+                                        page={cartData.number + 1}
                                         onChange={handlePageChange}
                                         color="primary"
                                     />
                                 </Box>
                             )}
 
-                            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Box sx={{
+                                mt: 4,
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center'
+                            }}>
                                 <Typography variant="h6">
                                     Total: ${total.toFixed(2)}
                                 </Typography>
@@ -217,8 +271,9 @@ const Cart = () => {
                                     color="primary"
                                     size="large"
                                     onClick={handleCheckout}
+                                    disabled={loading}
                                 >
-                                    Checkout
+                                    {loading ? 'Loading...' : 'Checkout'}
                                 </Button>
                             </Box>
                         </>
@@ -228,11 +283,12 @@ const Cart = () => {
                 <Snackbar
                     open={snackbar.open}
                     autoHideDuration={4000}
-                    onClose={() => setSnackbar({ ...snackbar, open: false })}
+                    onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
                 >
                     <Alert
-                        onClose={() => setSnackbar({ ...snackbar, open: false })}
+                        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
                         severity={snackbar.severity}
+                        sx={{ width: '100%' }}
                     >
                         {snackbar.message}
                     </Alert>
