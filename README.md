@@ -185,6 +185,76 @@ Le panneau client est une application React orientée utilisateur final, offrant
 - Protection CSRF
 - Gestion des sessions
 
+## Mécanismes Concurrents Implémentés
+
+### 1. Gestion des Stocks
+
+- **Verrous pessimistes (PESSIMISTIC_WRITE)** pour les opérations critiques
+  - Utilisation de `@Lock(LockModeType.PESSIMISTIC_WRITE)` pour les mises à jour de stock
+  - Timeout configurable pour éviter les deadlocks
+  - Gestion des exceptions de verrouillage
+
+- **Système de réservation temporaire**
+  - Réservation automatique des stocks lors de l'ajout au panier
+  - Expiration automatique des réservations non confirmées
+  - Nettoyage périodique des réservations expirées
+
+- **Double validation atomique**
+  - Vérification préliminaire de disponibilité
+  - Validation finale avant confirmation de commande
+  - Rollback automatique en cas d'échec
+
+### 2. Transactions Distribuées
+
+- **Workflow de commande transactionnel**
+  - Transaction globale pour le processus de commande
+  - Sous-transactions pour chaque étape (stock, paiement, livraison)
+  - Gestion des timeouts et des retries
+
+- **Mécanisme de compensation**
+  - Rollback automatique en cas d'échec
+  - Compensation des opérations partielles
+  - Journalisation des transactions pour audit
+
+- **Isolation des opérations**
+  - Niveau d'isolation configurable par opération
+  - Gestion des lectures sales et propres
+  - Protection contre les lectures fantômes
+
+### 3. Traitement Parallèle
+
+- **ThreadPool dédié**
+  - Pool de threads configurable pour les opérations batch
+  - Gestion de la charge et du throttling
+  - Monitoring des performances
+
+- **Traitement asynchrone**
+  - Import/Export de données en arrière-plan
+  - Notifications asynchrones
+  - Génération de rapports
+
+- **Priorisation des requêtes**
+  - File d'attente prioritaire pour les opérations temps réel
+  - Dégradation gracieuse en cas de surcharge
+  - Timeout adaptatif
+
+### 4. Cohérence des Données
+
+- **Versioning optimiste**
+  - `@Version` pour les entités fréquemment mises à jour
+  - Gestion des conflits de version
+  - Stratégies de résolution automatique
+
+- **Synchronisation inter-services**
+  - Communication événementielle entre services
+  - Ordre garanti des opérations
+  - Idempotence des opérations
+
+- **Monitoring des conflits**
+  - Métriques en temps réel
+  - Alertes sur les conflits fréquents
+  - Tableau de bord de monitoring
+
 ## Fonctionnalités Principales
 
 1. **Gestion des Produits**
