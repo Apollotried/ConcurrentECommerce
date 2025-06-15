@@ -1,10 +1,10 @@
-# E-Commerce Distribué
+# E-Commerce Concurrent
 
-Une application e-commerce moderne et distribuée construite avec Spring Boot et React.
+Une application e-commerce moderne avec gestion de la concurrence, construite avec Spring Boot et React.
 
 ## Description
 
-Cette application e-commerce offre une plateforme complète pour la gestion des produits, des commandes, des utilisateurs et des paiements. Elle implémente une architecture distribuée avec une séparation claire entre le frontend et le backend.
+Cette application e-commerce offre une plateforme complète pour la gestion des produits, des commandes, des utilisateurs et des paiements. Elle implémente une architecture robuste avec gestion de la concurrence pour assurer l'intégrité des données et la cohérence des transactions, particulièrement dans la gestion des stocks et des commandes.
 
 ## Prérequis Techniques
 
@@ -56,6 +56,25 @@ npm start
 ```
 
 ## Architecture du Projet
+
+### Gestion de la Concurrence
+
+L'application implémente plusieurs mécanismes pour gérer la concurrence et assurer la cohérence des données :
+
+1. **Gestion des Stocks**
+   - Verrouillage optimiste pour les mises à jour de stock
+   - Transactions atomiques pour les opérations critiques
+   - Gestion des conflits de mise à jour simultanée
+
+2. **Gestion des Commandes**
+   - Verrouillage pessimiste pour la création de commandes
+   - Transactions isolées pour le processus de checkout
+   - Gestion des timeouts et des rollbacks
+
+3. **Mécanismes de Synchronisation**
+   - Locks distribués pour les opérations critiques
+   - Gestion des deadlocks
+   - Stratégies de retry pour les opérations concurrentes
 
 ### Backend (Spring Boot)
 
