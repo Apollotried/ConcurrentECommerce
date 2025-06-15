@@ -216,7 +216,3 @@ Les contributions sont les bienvenues ! Veuillez suivre ces étapes :
 3. Commiter vos changements
 4. Pousser vers la branche
 5. Ouvrir une Pull Request
-
-## Licence
-
-[Type de licence] 
